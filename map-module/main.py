@@ -62,10 +62,7 @@ app.include_router(optimize_router)
 
 @app.get("/")
 async def root():
-    html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "map_interface.html")
-    if os.path.exists(html_path):
-        return FileResponse(html_path)
-    return {"status": "ok", "service": "map-module"}
+    return {"status": "ok", "service": "map-module", "docs": "/health"}
 
 
 @app.get("/health")
