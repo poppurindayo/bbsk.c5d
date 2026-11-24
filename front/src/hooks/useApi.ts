@@ -344,6 +344,16 @@ export const useDeleteOrder = () => {
   })
 }
 
+export const useUpdateOrder = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => ordersApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}
+
 // Days hooks
 export const useDay = (date: string) => {
   return useQuery({

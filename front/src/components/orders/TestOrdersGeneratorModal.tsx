@@ -43,12 +43,12 @@ interface GeneratedOrder {
 }
 
 const STANDARD_SLOTS = [
-  { start: '08:00', end: '10:00', label: '08:00 – 10:00 (Утро 1)' },
-  { start: '10:00', end: '12:00', label: '10:00 – 12:00 (Утро 2)' },
-  { start: '12:00', end: '14:00', label: '12:00 – 14:00 (День 1)' },
-  { start: '14:00', end: '16:00', label: '14:00 – 16:00 (День 2)' },
-  { start: '16:00', end: '18:00', label: '16:00 – 18:00 (Вечер 1)' },
-  { start: '18:00', end: '20:00', label: '18:00 – 20:00 (Вечер 2)' },
+  { start: '09:00', end: '11:00', label: '09:00 – 11:00' },
+  { start: '11:00', end: '13:00', label: '11:00 – 13:00' },
+  { start: '13:00', end: '15:00', label: '13:00 – 15:00' },
+  { start: '15:00', end: '17:00', label: '15:00 – 17:00' },
+  { start: '17:00', end: '19:00', label: '17:00 – 19:00' },
+  { start: '19:00', end: '21:00', label: '19:00 – 21:00' },
 ]
 
 export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> = ({
@@ -207,6 +207,8 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
           },
           is_repeat: ord.is_repeat,
           isRepeat: ord.is_repeat,
+          is_generated: true,
+          isGenerated: true,
         }
 
         await ordersApi.create(payload)
