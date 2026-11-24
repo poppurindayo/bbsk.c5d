@@ -178,6 +178,7 @@ class DayService(
             requiredStb = stb,
             isRepeat = orderDto.isRepeat,
             previousOrderId = orderDto.previousOrderId?.trim(),
+            isGenerated = orderDto.isGenerated,
             status = OrderStatus.PENDING
         )
     }
@@ -230,6 +231,7 @@ class DayService(
         order.requiredStb = stb
         order.isRepeat = orderDto.isRepeat
         order.previousOrderId = orderDto.previousOrderId?.trim()
+        order.isGenerated = orderDto.isGenerated
         order.status = OrderStatus.PENDING
     }
 

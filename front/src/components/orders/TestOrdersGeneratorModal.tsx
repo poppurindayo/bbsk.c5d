@@ -214,6 +214,8 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
           },
           is_repeat: ord.is_repeat,
           isRepeat: ord.is_repeat,
+          is_generated: true,
+          isGenerated: true,
         }
 
         await ordersApi.create(payload)

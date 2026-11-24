@@ -32,4 +32,21 @@ class SolverClient(
             throw ApiException(HttpStatus.SERVICE_UNAVAILABLE, "SOLVER_UNAVAILABLE", "Ошибка обращения к сервису оптимизации маршрутов: ${e.message}", cause = e)
         }
     }
+
+    /**
+     * Проверка доступности солвера (GET /health). Используется фронтендом через
+     * бэкенд-прокси, чтобы не обращаться к внутреннему сервису напрямую из браузера.
+     */
+    fun ping(): Boolean {
+        return try {
+            solverRestClient.get()
+                .uri("/health")
+                .retrieve()
+                .toBodilessEntity()
+            true
+        } catch (e: Exception) {
+            logger.warn("Solver health check failed: {}", e.message)
+            false
+        }
+    }
 }

@@ -106,6 +106,7 @@ export const ordersApi = {
   create: (data: any) => api.post('/v1/orders', data),
   update: (id: string, data: any) => api.put(`/v1/orders/${id}`, data),
   delete: (id: string) => api.delete(`/v1/orders/${id}`),
+  deleteGenerated: (date: string) => api.delete('/v1/orders/generated', { params: { date } }),
 }
 
 export const daysApi = {
@@ -121,6 +122,6 @@ export const daysApi = {
 }
 
 export const solverApi = {
-  health: () => axios.get('http://localhost:8000/health'),
-  optimize: (data: any) => axios.post('http://localhost:8000/api/v1/solver/optimize', data),
+  // Статус солвера через бэкенд-прокси (не напрямую в :8000 — иначе CORS)
+  health: () => api.get('/v1/solver/health'),
 }

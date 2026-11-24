@@ -80,5 +80,9 @@ data class DayOrderInputDto(
 
     @field:JsonProperty("previous_order_id")
     @field:Schema(description = "Номер первичного наряда при повторном обращении", example = "ORD-20261020-0042")
-    val previousOrderId: String? = null
+    val previousOrderId: String? = null,
+
+    @field:JsonProperty("is_generated")
+    @field:Schema(description = "Признак сгенерированного (тестового) наряда", example = "false")
+    val isGenerated: Boolean = false
 )

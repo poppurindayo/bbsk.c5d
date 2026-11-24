@@ -225,5 +225,13 @@ data class WorkOrderResponse(
         example = "PENDING",
         requiredMode = Schema.RequiredMode.REQUIRED
     )
-    val status: OrderStatus
+    val status: OrderStatus,
+
+    @field:JsonProperty("is_generated")
+    @field:Schema(
+        description = "Признак сгенерированного (тестового) наряда",
+        example = "false",
+        requiredMode = Schema.RequiredMode.REQUIRED
+    )
+    val isGenerated: Boolean = false
 )

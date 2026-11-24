@@ -31,7 +31,8 @@ class WorkOrderService(
     private val workTypeRepository: WorkTypeRepository,
     private val buildingRepository: BuildingRepository,
     private val accessNodeRepository: AccessNodeRepository,
-    private val serviceCenterRepository: ServiceCenterRepository
+    private val serviceCenterRepository: ServiceCenterRepository,
+    private val routeRepository: RouteRepository
 ) {
 
     @Transactional(readOnly = true)
@@ -134,6 +135,7 @@ class WorkOrderService(
             requiredStb = stb,
             isRepeat = request.isRepeat,
             previousOrderId = request.previousOrderId?.trim(),
+            isGenerated = request.isGenerated,
             status = request.status
         )
 
@@ -206,6 +208,39 @@ class WorkOrderService(
             NotFoundException("ORDER_NOT_FOUND", "Наряд с id '$id' не найден")
         }
         workOrderRepository.delete(order)
+    }
+
+    /**
+     * Удаляет только сгенерированные (тестовые) наряды дня, сохраняя вручную созданные.
+     * Сначала убирает ссылки на них из маршрутов (стопы), затем удаляет сами наряды.
+     */
+    @Transactional
+    fun deleteGenerated(date: LocalDate): Int {
+        val day = workDayRepository.findByDate(date) ?: return 0
+        val allOrders = workOrderRepository.findAllByDayId(day.id)
+        val generated = allOrders.filter { it.isGenerated }
+        if (generated.isEmpty()) return 0
+
+        val generatedIds = generated.map { it.id }.toSet()
+
+        // Удаляем стопы маршрутов, ссылающиеся на сгенерированные наряды (иначе FK-конфликт)
+        val routes = routeRepository.findAllByDayId(day.id)
+        var routesChanged = false
+        for (route in routes) {
+            val toRemove = route.stops.filter { stop -> stop.order?.id in generatedIds }
+            if (toRemove.isNotEmpty()) {
+                route.stops.removeAll(toRemove)
+                routesChanged = true
+            }
+        }
+        if (routesChanged) {
+            routeRepository.saveAll(routes)
+            routeRepository.flush()
+        }
+
+        workOrderRepository.deleteAll(generated)
+        workOrderRepository.flush()
+        return generated.size
     }
 
     private fun resolveWorkDay(dayId: UUID?, dayDate: LocalDate?, slotStart: OffsetDateTime): WorkDay {
@@ -281,6 +316,7 @@ class WorkOrderService(
             ),
             isRepeat = isRepeat,
             previousOrderId = previousOrderId,
+            isGenerated = isGenerated,
             status = status
         )
     }

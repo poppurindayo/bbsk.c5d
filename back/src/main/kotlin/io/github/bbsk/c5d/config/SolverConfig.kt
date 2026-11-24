@@ -15,7 +15,7 @@ class SolverConfig(
     @Value("\${app.solver.connect-timeout-ms:3000}")
     val connectTimeoutMs: Long,
 
-    @Value("\${app.solver.read-timeout-ms:60000}")
+    @Value("\${app.solver.read-timeout-ms:300000}")
     val readTimeoutMs: Long
 ) {
 

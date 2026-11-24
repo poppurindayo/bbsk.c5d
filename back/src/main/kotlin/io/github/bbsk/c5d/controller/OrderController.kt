@@ -193,4 +193,23 @@ class OrderController(
         workOrderService.delete(id)
         return ResponseEntity.noContent().build()
     }
+
+    @Operation(
+        summary = "Удалить сгенерированные (тестовые) наряды дня",
+        description = "Удаляет только наряды с признаком is_generated=true за указанную дату, сохраняя вручную созданные. Ссылки на них убираются из маршрутов."
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "Возвращает количество удалённых нарядов"),
+            ApiResponse(responseCode = "404", description = "День не найден")
+        ]
+    )
+    @DeleteMapping("/generated")
+    fun deleteGenerated(
+        @Parameter(description = "Дата рабочего дня (YYYY-MM-DD)", example = "2026-10-26")
+        @RequestParam(name = "date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate
+    ): ResponseEntity<Map<String, Int>> {
+        val deleted = workOrderService.deleteGenerated(date)
+        return ResponseEntity.ok(mapOf("deleted" to deleted))
+    }
 }

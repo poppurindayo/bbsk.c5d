@@ -152,5 +152,13 @@ data class CreateWorkOrderRequest(
         example = "PENDING",
         defaultValue = "PENDING"
     )
-    val status: OrderStatus = OrderStatus.PENDING
+    val status: OrderStatus = OrderStatus.PENDING,
+
+    @field:JsonProperty("is_generated")
+    @field:Schema(
+        description = "Признак сгенерированного (тестового) наряда — такие наряды можно массово удалить",
+        example = "false",
+        defaultValue = "false"
+    )
+    val isGenerated: Boolean = false
 )

@@ -92,10 +92,27 @@ def solve_vrptw(request: SolverRequest) -> SolverResponse:
             # поэтому влияет только на ВЫБОР сотрудника, а не позиции вставки.
             load_penalty = staff_assigned_minutes[sid] * LOAD_WEIGHT_PER_MIN
 
+            # === УСКОРЕНИЕ: вместо перебора ВСЕХ позиций (O(n) полных пересчётов таймлайна)
+            # пробуем лишь несколько перспективных: начало, конец и позицию рядом с
+            # географически ближайшим визитом (по матрице). Это даёт кратное ускорение
+            # на больших объёмах (сотни-тысячи нарядов) без заметной потери качества.
+            n = len(current_visits)
+            candidate_positions = {0, n}
+            if n > 0:
+                nearest_idx = 0
+                nearest_sec = 10 ** 9
+                for idx, v in enumerate(current_visits):
+                    d_sec, _ = matrix_loader.get_travel(order.building_id, v.building_id, None)
+                    if d_sec < nearest_sec:
+                        nearest_sec = d_sec
+                        nearest_idx = idx
+                candidate_positions.add(nearest_idx)
+                candidate_positions.add(min(n, nearest_idx + 1))
+
             # Для данного сотрудника ищем позицию с минимальным суммарным путём маршрута.
             staff_best_pos = -1
             staff_best_new_travel = 10 ** 9
-            for pos in range(len(current_visits) + 1):
+            for pos in candidate_positions:
                 trial_visits = current_visits[:pos] + [order] + current_visits[pos:]
                 trial_stops, _ = insert_break_and_restock(
                     staff, trial_visits, request.service_centers, base_date
@@ -140,17 +157,20 @@ def solve_vrptw(request: SolverRequest) -> SolverResponse:
             while improved and iterations < 10:
                 improved = False
                 iterations += 1
+                # Текущий маршрут не меняется до первой удачной перестановки — считаем его
+                # длину один раз на проход, а не на каждой паре (i, j).
+                old_stops, _ = insert_break_and_restock(
+                    staff, visits, request.service_centers, base_date
+                )
+                old_travel = sum(s.travel_sec for s in old_stops)
                 for i in range(len(visits) - 1):
                     for j in range(i + 1, min(len(visits), i + 4)):
                         # Пробуем перевернуть отрезок между i и j
                         new_visits = visits[:i] + list(reversed(visits[i:j+1])) + visits[j+1:]
-                        old_stops, _ = insert_break_and_restock(
-                            staff, visits, request.service_centers, base_date
-                        )
                         new_stops, _ = insert_break_and_restock(
                             staff, new_visits, request.service_centers, base_date
                         )
-                        if sum(s.travel_sec for s in new_stops) < sum(s.travel_sec for s in old_stops):
+                        if sum(s.travel_sec for s in new_stops) < old_travel:
                             visits = new_visits
                             staff_assigned_visits[staff_id] = new_visits
                             improved = True

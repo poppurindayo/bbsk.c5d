@@ -398,6 +398,7 @@ export const OrdersPage = () => {
                     const address = order.address || bld?.address || bldId || '—'
                     const bldCode = order.building_code || bld?.code || ''
                     const wtName = order.work_type_name || wt?.name || wt?.code || wtId || '—'
+                    const isGenerated = order.is_generated ?? order.isGenerated ?? false
                     const slotStart = order.slot_start || order.slotStart
                     const slotEnd = order.slot_end || order.slotEnd
                     const reqEq = order.required_equipment || order.requiredEquipment || {}
@@ -408,7 +409,12 @@ export const OrdersPage = () => {
                     return (
                       <TableRow key={order.id || code}>
                         <TableCell className="font-mono font-semibold text-primary">
-                          {code}
+                          <div className="flex items-center gap-1.5">
+                            <span>{code}</span>
+                            {isGenerated && (
+                              <Badge variant="secondary" className="text-[9px] py-0 px-1.5">тест</Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="max-w-[240px]">
                           <p className="truncate font-medium">{address}</p>

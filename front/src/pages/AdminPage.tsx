@@ -10,6 +10,7 @@ import { WorkTypesPage } from './WorkTypesPage'
 import { useInitReference, useInitTravelMatrix, useLoadReference, useLoadTravelMatrix } from '@/hooks/useApi'
 import { TestDataWizardModal } from '@/components/admin/TestDataWizardModal'
 import { TestOrdersGeneratorModal } from '@/components/orders/TestOrdersGeneratorModal'
+import { SystemStatsCard } from '@/components/admin/SystemStatsCard'
 import { useDayStore } from '@/store/dayStore'
 
 export const AdminPage = () => {
@@ -257,6 +258,9 @@ export const AdminPage = () => {
 
         {/* Tab 7: System Operations & File Uploads (Requirement 2 & 3) */}
         <TabsContent value="system" className="space-y-6">
+          {/* Статистика и производительность системы */}
+          <SystemStatsCard />
+
           {systemMessage && (
             <div
               className={`p-4 rounded-lg flex items-center gap-3 text-sm ${
