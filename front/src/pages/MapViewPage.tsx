@@ -8,6 +8,7 @@ import { MapPin, Users, Building2, Navigation, Layers, RefreshCw, Loader2, Chevr
 import { usePlan, useServiceCenters, useBuildings, useAccessNodes } from '@/hooks/useApi'
 import { useDayStore } from '@/store/dayStore'
 import { RouteMap, ROUTE_COLORS } from '@/components/map/RouteMap'
+import { formatClock } from '@/utils/time'
 
 export const MapViewPage = () => {
   const { currentDate, setCurrentDate, selectedServiceCenterId, setSelectedServiceCenterId } = useDayStore()
@@ -276,7 +277,7 @@ export const MapViewPage = () => {
                                 </span>
                               </div>
                               <span className="text-muted-foreground font-mono">
-                                {stop.arrival ? stop.arrival.substring(11, 16) : '—'}
+                                {formatClock(stop.arrival, '—')}
                               </span>
                             </div>
                           ))}

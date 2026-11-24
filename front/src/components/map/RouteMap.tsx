@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Building2, Navigation, Layers, Clock, Package, AlertCircle } from 'lucide-react'
 import type { Route, RouteStop, ServiceCenter, Building, AccessNode } from '@/types/api'
+import { formatClock } from '@/utils/time'
 
 // Palette for brigade routes
 export const ROUTE_COLORS = [
@@ -471,13 +472,13 @@ export const RouteMap: React.FC<RouteMapProps> = ({
                             <div>
                               <span className="text-muted-foreground">Прибытие:</span>{' '}
                               <span className="font-medium">
-                                {stop.arrival ? stop.arrival.substring(11, 16) : '—'}
+                                {formatClock(stop.arrival, '—')}
                               </span>
                             </div>
                             <div>
                               <span className="text-muted-foreground">Окончание:</span>{' '}
                               <span className="font-medium">
-                                {stop.endTime ? stop.endTime.substring(11, 16) : '—'}
+                                {formatClock(stop.endTime, '—')}
                               </span>
                             </div>
                             <div>

@@ -15,6 +15,7 @@ import { useOrders, useCreateOrder, useWorkTypes, useBuildings, useServiceCenter
 import { useDayStore } from '@/store/dayStore'
 import { TestOrdersGeneratorModal } from '@/components/orders/TestOrdersGeneratorModal'
 import { format } from 'date-fns'
+import { formatClock } from '@/utils/time'
 
 const orderSchema = z.object({
   orderId: z.string().regex(/^ORD-[0-9]{8}-[0-9]{4}$/, 'Формат: ORD-ГГГГММДД-ЧЧЧЧ (напр. ORD-20261026-0001)'),
@@ -137,8 +138,8 @@ export const OrdersPage = () => {
 
     const slotStart = order.slot_start || order.slotStart
     const slotEnd = order.slot_end || order.slotEnd
-    const slotTimeStart = slotStart ? slotStart.substring(11, 16) : '09:00'
-    const slotTimeEnd = slotEnd ? slotEnd.substring(11, 16) : '11:00'
+    const slotTimeStart = formatClock(slotStart, '09:00')
+    const slotTimeEnd = formatClock(slotEnd, '11:00')
 
     const dayId = order.day_date || order.dayDate || order.day_id || order.dayId || currentDate
 
@@ -556,8 +557,8 @@ export const OrdersPage = () => {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-xs font-mono">
-                          {slotStart ? slotStart.substring(11, 16) : '—'} –{' '}
-                          {slotEnd ? slotEnd.substring(11, 16) : '—'}
+                          {formatClock(slotStart, '—')} –{' '}
+                          {formatClock(slotEnd, '—')}
                         </TableCell>
                         <TableCell>
                           <Badge
@@ -890,8 +891,8 @@ export const OrdersPage = () => {
                 <div>
                   <span className="text-muted-foreground block mb-0.5">Слот клиента:</span>
                   <p className="font-mono font-medium">
-                    {(viewOrder.slotStart || viewOrder.slot_start)?.substring(11, 16) || '—'} –{' '}
-                    {(viewOrder.slotEnd || viewOrder.slot_end)?.substring(11, 16) || '—'}
+                    {formatClock(viewOrder.slotStart || viewOrder.slot_start, '—')} –{' '}
+                    {formatClock(viewOrder.slotEnd || viewOrder.slot_end, '—')}
                   </p>
                 </div>
                 <div>
