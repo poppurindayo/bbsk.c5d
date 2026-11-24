@@ -56,6 +56,7 @@ export const staffApi = {
     list: () => api.get('/v1/staff/shifts'),
     get: (id: string) => api.get(`/v1/staff/shifts/${id}`),
     create: (data: any) => api.post('/v1/staff/shifts', data),
+    update: (id: string, data: any) => api.put(`/v1/staff/shifts/${id}`, data),
     delete: (id: string) => api.delete(`/v1/staff/shifts/${id}`),
   },
 }

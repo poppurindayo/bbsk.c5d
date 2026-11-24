@@ -2,6 +2,7 @@ package io.github.bbsk.c5d.config
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
@@ -33,23 +34,18 @@ class SecurityConfig(
                     .requestMatchers("/api/v1/health").permitAll()
                     .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                     .requestMatchers("/auth/**", "/api/auth/**").permitAll()
-                    // Reference / НСИ — только ADMIN
+                    // Чтение (GET) справочников доступно обеим ролям — диспетчеру нужны здания, staff, типы работ для карты и планирования
+                    .requestMatchers(HttpMethod.GET, "/api/v1/**").hasAnyRole("DISPATCHER", "ADMIN")
+                    // Запись НСИ и справочников — только ADMIN
                     .requestMatchers("/api/v1/reference/**").hasRole("ADMIN")
-                    // Staff CRUD — только ADMIN
                     .requestMatchers("/api/v1/staff/**").hasRole("ADMIN")
-                    // Buildings / Service Centers / Access Nodes — только ADMIN
                     .requestMatchers("/api/v1/buildings/**").hasRole("ADMIN")
-                    // Work Types — только ADMIN
                     .requestMatchers("/api/v1/work-types/**").hasRole("ADMIN")
-                    // Days init / events — DISPATCHER и ADMIN
-                    .requestMatchers("/api/v1/days/*/events").hasAnyRole("DISPATCHER", "ADMIN")
-                    .requestMatchers("/api/v1/days/*/plan").hasAnyRole("DISPATCHER", "ADMIN")
-                    .requestMatchers("/api/v1/days/*").hasAnyRole("DISPATCHER", "ADMIN")
-                    // Orders — DISPATCHER и ADMIN
+                    // Рабочие дни, наряды, события, солвер — DISPATCHER и ADMIN
+                    .requestMatchers("/api/v1/days/**").hasAnyRole("DISPATCHER", "ADMIN")
                     .requestMatchers("/api/v1/orders/**").hasAnyRole("DISPATCHER", "ADMIN")
-                    // Solver — DISPATCHER и ADMIN
                     .requestMatchers("/api/v1/solver/**").hasAnyRole("DISPATCHER", "ADMIN")
-                    // Everything else requires authentication
+                    // Остальное требует аутентификации
                     .anyRequest().authenticated()
             }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)

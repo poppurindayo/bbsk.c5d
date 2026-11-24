@@ -11,8 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Plus, Search, Loader2, Building2, Wifi, MapPin, AlertTriangle, Layers, Map } from 'lucide-react'
-import { useBuildings, useServiceCenters, useAccessNodes, useCreateAccessNode, useCreateBuilding, useCreateServiceCenter } from '@/hooks/useApi'
+import { Plus, Search, Loader2, Building2, Wifi, MapPin, AlertTriangle, Layers, Map, Edit, Trash2 } from 'lucide-react'
+import { useBuildings, useServiceCenters, useAccessNodes, useCreateAccessNode, useCreateBuilding, useCreateServiceCenter, useUpdateAccessNode, useUpdateBuilding, useUpdateServiceCenter, useDeleteAccessNode, useDeleteBuilding, useDeleteServiceCenter } from '@/hooks/useApi'
 import { LocationPicker, ExistingLocation } from '@/components/map/LocationPicker'
 
 const buildingSchema = z.object({
@@ -66,6 +66,7 @@ export const BuildingsPage = ({ defaultTab = 'buildings', hideTitle = false }: B
   const [activeTab, setActiveTab] = useState<string>(defaultTab)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogError, setDialogError] = useState<string>('')
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const { data: buildings = [], isLoading: buildingsLoading, refetch: refetchBuildings } = useBuildings()
   const { data: accessNodes = [], isLoading: anLoading, refetch: refetchAN } = useAccessNodes()
@@ -74,6 +75,12 @@ export const BuildingsPage = ({ defaultTab = 'buildings', hideTitle = false }: B
   const createAccessNode = useCreateAccessNode()
   const createBuilding = useCreateBuilding()
   const createServiceCenter = useCreateServiceCenter()
+  const updateAccessNode = useUpdateAccessNode()
+  const updateBuilding = useUpdateBuilding()
+  const updateServiceCenter = useUpdateServiceCenter()
+  const deleteAccessNode = useDeleteAccessNode()
+  const deleteBuilding = useDeleteBuilding()
+  const deleteServiceCenter = useDeleteServiceCenter()
 
   const buildingForm = useForm<BuildingForm>({
     resolver: zodResolver(buildingSchema),
@@ -160,6 +167,7 @@ export const BuildingsPage = ({ defaultTab = 'buildings', hideTitle = false }: B
 
   const openCreate = (type: typeof activeTab) => {
     setDialogError('')
+    setEditingId(null)
     if (type === 'buildings') {
       buildingForm.reset({
         buildingId: `B-${String(buildings.length + 1).padStart(3, '0')}`,
@@ -199,35 +207,135 @@ export const BuildingsPage = ({ defaultTab = 'buildings', hideTitle = false }: B
 
   const handleBuildingSubmit = (data: BuildingForm) => {
     setDialogError('')
-    createBuilding.mutate(data, {
-      onSuccess: () => {
-        setDialogOpen(false)
-        refetchBuildings()
-      },
-      onError: (err: any) => setDialogError(err.response?.data?.message || 'Ошибка создания здания'),
-    })
+    const payload = {
+      building_id: data.buildingId,
+      access_node_id: data.accessNodeId,
+      zone_service_center_id: data.zoneServiceCenterId ? data.zoneServiceCenterId : null,
+      address: data.address,
+      lat: Number(data.lat),
+      lon: Number(data.lon),
+      building_type: data.buildingType,
+      overhead_line: data.overheadLine,
+    }
+    const onSuccess = () => {
+      setDialogOpen(false)
+      setEditingId(null)
+      refetchBuildings()
+    }
+    const onError = (err: any) => setDialogError(err.response?.data?.message || 'Ошибка сохранения здания')
+
+    if (editingId) {
+      updateBuilding.mutate({ id: editingId, data: payload }, { onSuccess, onError })
+    } else {
+      createBuilding.mutate(payload, { onSuccess, onError })
+    }
   }
 
   const handleANSubmit = (data: AccessNodeForm) => {
     setDialogError('')
-    createAccessNode.mutate(data, {
-      onSuccess: () => {
-        setDialogOpen(false)
-        refetchAN()
-      },
-      onError: (err: any) => setDialogError(err.response?.data?.message || 'Ошибка создания узла'),
-    })
+    const payload = {
+      access_node_id: data.accessNodeId,
+      node_type: data.nodeType,
+      technology: data.technology,
+      name: data.name,
+      address: data.address,
+      lat: Number(data.lat),
+      lon: Number(data.lon),
+    }
+    const onSuccess = () => {
+      setDialogOpen(false)
+      setEditingId(null)
+      refetchAN()
+    }
+    const onError = (err: any) => setDialogError(err.response?.data?.message || 'Ошибка сохранения узла')
+
+    if (editingId) {
+      updateAccessNode.mutate({ id: editingId, data: payload }, { onSuccess, onError })
+    } else {
+      createAccessNode.mutate(payload, { onSuccess, onError })
+    }
   }
 
   const handleSCSubmit = (data: SCForm) => {
     setDialogError('')
-    createServiceCenter.mutate(data, {
-      onSuccess: () => {
-        setDialogOpen(false)
-        refetchSC()
-      },
-      onError: (err: any) => setDialogError(err.response?.data?.message || 'Ошибка создания СЦ'),
+    const payload = {
+      service_center_id: data.serviceCenterId,
+      name: data.name,
+      address: data.address,
+      lat: Number(data.lat),
+      lon: Number(data.lon),
+      opening_hours: { open: data.openingHours.open, close: data.openingHours.close },
+      restock_duration_min: Number(data.restockDurationMin),
+    }
+    const onSuccess = () => {
+      setDialogOpen(false)
+      setEditingId(null)
+      refetchSC()
+    }
+    const onError = (err: any) => setDialogError(err.response?.data?.message || 'Ошибка сохранения СЦ')
+
+    if (editingId) {
+      updateServiceCenter.mutate({ id: editingId, data: payload }, { onSuccess, onError })
+    } else {
+      createServiceCenter.mutate(payload, { onSuccess, onError })
+    }
+  }
+
+  // ─── Edit handlers: pre-fill forms from existing rows ────────────────────────
+  const openEditBuilding = (b: any) => {
+    setEditingId(b.id)
+    setDialogError('')
+    buildingForm.reset({
+      buildingId: b.building_id || b.code || b.buildingId || '',
+      accessNodeId: b.access_node_id || b.accessNodeId || '',
+      zoneServiceCenterId: b.zone_service_center_id || b.zoneServiceCenterId || '',
+      address: b.address || '',
+      lat: Number(b.lat),
+      lon: Number(b.lon),
+      buildingType: b.building_type || b.buildingType || 'MKD',
+      overheadLine: b.overhead_line ?? b.overheadLine ?? false,
     })
+    setDialogOpen(true)
+  }
+
+  const openEditAN = (an: any) => {
+    setEditingId(an.id)
+    setDialogError('')
+    anForm.reset({
+      accessNodeId: an.access_node_id || an.code || an.accessNodeId || '',
+      nodeType: an.node_type || an.nodeType || 'OLT',
+      technology: an.technology || 'PON',
+      name: an.name || '',
+      address: an.address || '',
+      lat: Number(an.lat),
+      lon: Number(an.lon),
+    })
+    setDialogOpen(true)
+  }
+
+  const openEditSC = (sc: any) => {
+    setEditingId(sc.id)
+    setDialogError('')
+    scForm.reset({
+      serviceCenterId: sc.service_center_id || sc.code || sc.serviceCenterId || '',
+      name: sc.name || '',
+      address: sc.address || '',
+      lat: Number(sc.lat),
+      lon: Number(sc.lon),
+      openingHours: {
+        open: sc.opening_hours?.open || sc.openingHours?.open || sc.openTime || '08:00',
+        close: sc.opening_hours?.close || sc.openingHours?.close || sc.closeTime || '20:00',
+      },
+      restockDurationMin: sc.restock_duration_min ?? sc.restockDurationMin ?? 15,
+    })
+    setDialogOpen(true)
+  }
+
+  const handleDelete = (type: 'buildings' | 'access-nodes' | 'service-centers', id: string) => {
+    if (!window.confirm('Удалить запись? Это действие необратимо.')) return
+    if (type === 'buildings') deleteBuilding.mutate(id, { onSuccess: () => refetchBuildings() })
+    if (type === 'access-nodes') deleteAccessNode.mutate(id, { onSuccess: () => refetchAN() })
+    if (type === 'service-centers') deleteServiceCenter.mutate(id, { onSuccess: () => refetchSC() })
   }
 
   return (
@@ -341,6 +449,7 @@ export const BuildingsPage = ({ defaultTab = 'buildings', hideTitle = false }: B
                         <TableHead>СЦ зоны</TableHead>
                         <TableHead>ВЛС (высота)</TableHead>
                         <TableHead>Координаты</TableHead>
+                        <TableHead className="text-right">Действия</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -403,6 +512,16 @@ export const BuildingsPage = ({ defaultTab = 'buildings', hideTitle = false }: B
                               <TableCell className="font-mono text-xs text-muted-foreground">
                                 {Number(b.lat).toFixed(4)}, {Number(b.lon).toFixed(4)}
                               </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button variant="ghost" size="icon" onClick={() => openEditBuilding(b)} title="Редактировать">
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete('buildings', b.id)} title="Удалить">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
                             </TableRow>
                           )
                         })}
@@ -438,6 +557,7 @@ export const BuildingsPage = ({ defaultTab = 'buildings', hideTitle = false }: B
                         <TableHead>Название узла</TableHead>
                         <TableHead>Адрес размещения</TableHead>
                         <TableHead>Координаты</TableHead>
+                        <TableHead className="text-right">Действия</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -458,6 +578,16 @@ export const BuildingsPage = ({ defaultTab = 'buildings', hideTitle = false }: B
                             <TableCell className="max-w-[240px] truncate">{an.address}</TableCell>
                             <TableCell className="font-mono text-xs text-muted-foreground">
                               {Number(an.lat).toFixed(4)}, {Number(an.lon).toFixed(4)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button variant="ghost" size="icon" onClick={() => openEditAN(an)} title="Редактировать">
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete('access-nodes', an.id)} title="Удалить">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         )
@@ -495,6 +625,7 @@ export const BuildingsPage = ({ defaultTab = 'buildings', hideTitle = false }: B
                       <TableHead>Режим работы</TableHead>
                       <TableHead>Пополнение АО</TableHead>
                       <TableHead>Координаты</TableHead>
+                      <TableHead className="text-right">Действия</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -520,6 +651,16 @@ export const BuildingsPage = ({ defaultTab = 'buildings', hideTitle = false }: B
                           </TableCell>
                           <TableCell className="font-mono text-xs text-muted-foreground">
                             {Number(sc.lat).toFixed(4)}, {Number(sc.lon).toFixed(4)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => openEditSC(sc)} title="Редактировать">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete('service-centers', sc.id)} title="Удалить">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       )
@@ -691,9 +832,9 @@ export const BuildingsPage = ({ defaultTab = 'buildings', hideTitle = false }: B
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Отмена
               </Button>
-              <Button type="submit" disabled={createBuilding.isPending}>
-                {createBuilding.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Добавить здание
+              <Button type="submit" disabled={createBuilding.isPending || updateBuilding.isPending}>
+                {createBuilding.isPending || updateBuilding.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {editingId ? 'Сохранить здание' : 'Добавить здание'}
               </Button>
             </DialogFooter>
           </form>
@@ -800,9 +941,9 @@ export const BuildingsPage = ({ defaultTab = 'buildings', hideTitle = false }: B
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Отмена
               </Button>
-              <Button type="submit" disabled={createAccessNode.isPending}>
-                {createAccessNode.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Добавить узел
+              <Button type="submit" disabled={createAccessNode.isPending || updateAccessNode.isPending}>
+                {createAccessNode.isPending || updateAccessNode.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {editingId ? 'Сохранить узел' : 'Добавить узел'}
               </Button>
             </DialogFooter>
           </form>
@@ -889,9 +1030,9 @@ export const BuildingsPage = ({ defaultTab = 'buildings', hideTitle = false }: B
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Отмена
               </Button>
-              <Button type="submit" disabled={createServiceCenter.isPending}>
-                {createServiceCenter.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Добавить Сервисный Центр
+              <Button type="submit" disabled={createServiceCenter.isPending || updateServiceCenter.isPending}>
+                {createServiceCenter.isPending || updateServiceCenter.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {editingId ? 'Сохранить СЦ' : 'Добавить Сервисный Центр'}
               </Button>
             </DialogFooter>
           </form>
