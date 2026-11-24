@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -11,9 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog'
-import { Plus, Search, Loader2, Eye, Filter, RefreshCw, CheckCircle2, AlertTriangle, Calendar, Building2, Wand2, Clock, Sparkles, Trash2, X } from 'lucide-react'
-import { useOrders, useCreateOrder, useWorkTypes, useBuildings, useServiceCenters } from '@/hooks/useApi'
-import { ordersApi } from '@/api/client'
+import { Plus, Search, Loader2, Eye, Filter, RefreshCw, CheckCircle2, AlertTriangle, Calendar, Building2, Wand2, Clock, Sparkles, Check, Minus, Trash2 } from 'lucide-react'
+import { useOrders, useCreateOrder, useWorkTypes, useBuildings, useServiceCenters, useDeleteOrder } from '@/hooks/useApi'
 import { useDayStore } from '@/store/dayStore'
 import { TestOrdersGeneratorModal } from '@/components/orders/TestOrdersGeneratorModal'
 import { format } from 'date-fns'
@@ -45,7 +43,6 @@ const PRESET_SLOTS = [
 
 export const OrdersPage = () => {
   const { currentDate, setCurrentDate, selectedServiceCenterId, setSelectedServiceCenterId } = useDayStore()
-  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [filterAllDates, setFilterAllDates] = useState(false)
@@ -53,8 +50,6 @@ export const OrdersPage = () => {
   const [generatorOpen, setGeneratorOpen] = useState(false)
   const [viewOrder, setViewOrder] = useState<any>(null)
   const [formError, setFormError] = useState<string>('')
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // Slot time state for user-friendly picker
   const [slotTimeStart, setSlotTimeStart] = useState('09:00')
@@ -69,6 +64,51 @@ export const OrdersPage = () => {
   const { data: buildings = [] } = useBuildings()
   const { data: serviceCenters = [] } = useServiceCenters()
   const createOrder = useCreateOrder()
+  const deleteOrder = useDeleteOrder()
+
+  // Bulk delete state
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
+  const isAllSelected = filteredOrders.length > 0 && filteredOrders.every((o: any) => selectedOrderIds.has(o.id))
+
+  const toggleOrderSelection = (orderId: string) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(orderId)) {
+        next.delete(orderId)
+      } else {
+        next.add(orderId)
+      }
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedOrderIds(new Set())
+    } else {
+      setSelectedOrderIds(new Set(filteredOrders.map((o: any) => o.id)))
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedOrderIds.size === 0) return
+    if (!window.confirm(`Удалить ${selectedOrderIds.size} наряд(ов)? Это действие нельзя отменить.`)) return
+
+    let successCount = 0
+    for (const orderId of selectedOrderIds) {
+      try {
+        await deleteOrder.mutateAsync(orderId)
+        successCount++
+      } catch (err) {
+        console.error('Failed to delete order:', orderId, err)
+      }
+    }
+    setSelectedOrderIds(new Set())
+    refetch()
+    if (successCount > 0) {
+      alert(`Успешно удалено ${successCount} наряд(ов)`)
+    }
+  }
 
   // Generate unique order ID in format ORD-YYYYMMDD-XXXX
   const generateOrderId = (dateStr: string) => {
@@ -334,6 +374,29 @@ export const OrdersPage = () => {
                 {filterAllDates ? 'Все даты' : 'Только день'}
               </Button>
 
+              {/* Bulk delete button */}
+              {selectedOrderIds.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                  className="gap-1.5"
+                  disabled={deleteOrder.isPending}
+                >
+                  {deleteOrder.isPending ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Удаление...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Удалить выбранные ({selectedOrderIds.size})
+                    </>
+                  )}
+                </Button>
+              )}
+
               {/* Date picker */}
               {!filterAllDates && (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -383,6 +446,15 @@ export const OrdersPage = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12 text-center">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                        checked={isAllSelected}
+                        onChange={toggleSelectAll}
+                        title="Выбрать все наряды на текущей странице"
+                      />
+                    </TableHead>
                     <TableHead>Код наряда</TableHead>
                     <TableHead>Адрес объекта</TableHead>
                     <TableHead>Тип работ</TableHead>
@@ -403,7 +475,6 @@ export const OrdersPage = () => {
                     const address = order.address || bld?.address || bldId || '—'
                     const bldCode = order.building_code || bld?.code || ''
                     const wtName = order.work_type_name || wt?.name || wt?.code || wtId || '—'
-                    const isGenerated = order.is_generated ?? order.isGenerated ?? false
                     const slotStart = order.slot_start || order.slotStart
                     const slotEnd = order.slot_end || order.slotEnd
                     const reqEq = order.required_equipment || order.requiredEquipment || {}
@@ -413,13 +484,16 @@ export const OrdersPage = () => {
 
                     return (
                       <TableRow key={order.id || code}>
+                        <TableCell className="w-12 text-center">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                            checked={selectedOrderIds.has(order.id)}
+                            onChange={() => toggleOrderSelection(order.id)}
+                          />
+                        </TableCell>
                         <TableCell className="font-mono font-semibold text-primary">
-                          <div className="flex items-center gap-1.5">
-                            <span>{code}</span>
-                            {isGenerated && (
-                              <Badge variant="secondary" className="text-[9px] py-0 px-1.5">тест</Badge>
-                            )}
-                          </div>
+                          {code}
                         </TableCell>
                         <TableCell className="max-w-[240px]">
                           <p className="truncate font-medium">{address}</p>

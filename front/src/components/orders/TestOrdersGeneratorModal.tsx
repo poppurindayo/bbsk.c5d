@@ -43,11 +43,12 @@ interface GeneratedOrder {
 }
 
 const STANDARD_SLOTS = [
-  { start: '09:00', end: '11:00', label: '09:00 – 11:00 (Утро 1)' },
-  { start: '11:00', end: '13:00', label: '11:00 – 13:00 (Утро 2)' },
-  { start: '13:00', end: '15:00', label: '13:00 – 15:00 (День 1)' },
-  { start: '15:00', end: '17:00', label: '15:00 – 17:00 (День 2)' },
-  { start: '17:00', end: '19:00', label: '17:00 – 19:00 (Вечер)' },
+  { start: '08:00', end: '10:00', label: '08:00 – 10:00 (Утро 1)' },
+  { start: '10:00', end: '12:00', label: '10:00 – 12:00 (Утро 2)' },
+  { start: '12:00', end: '14:00', label: '12:00 – 14:00 (День 1)' },
+  { start: '14:00', end: '16:00', label: '14:00 – 16:00 (День 2)' },
+  { start: '16:00', end: '18:00', label: '16:00 – 18:00 (Вечер 1)' },
+  { start: '18:00', end: '20:00', label: '18:00 – 20:00 (Вечер 2)' },
 ]
 
 export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> = ({
@@ -59,7 +60,6 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
   const [date, setDate] = useState<string>(targetDate || new Date().toISOString().split('T')[0])
   const [count, setCount] = useState<number>(10)
   const [repeatRatio, setRepeatRatio] = useState<number>(10) // percent
-  const [replaceExisting, setReplaceExisting] = useState<boolean>(true)
   const [previewOrders, setPreviewOrders] = useState<GeneratedOrder[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
@@ -82,6 +82,12 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
     const cleanDate = date.replace(/-/g, '')
     const generated: GeneratedOrder[] = []
 
+    // Distribute orders evenly across slots
+    const slotsCount = STANDARD_SLOTS.length
+    const ordersPerSlot = Math.ceil(count / slotsCount)
+    let slotIndex = 0
+    let slotUsage = 0
+
     for (let i = 1; i <= count; i++) {
       const orderNum = String(1000 + i).padStart(4, '0')
       const orderId = `ORD-${cleanDate}-${orderNum}`
@@ -91,11 +97,17 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
       // Pick random work type
       const wt = workTypes.length > 0 ? workTypes[Math.floor(Math.random() * workTypes.length)] : null
 
-      // Pick slot
-      const slot = STANDARD_SLOTS[(i - 1) % STANDARD_SLOTS.length]
+      // Pick slot - distribute evenly across all slots
+      const slot = STANDARD_SLOTS[slotIndex]
       const slotStart = `${date}T${slot.start}:00+05:00`
       const slotEnd = `${date}T${slot.end}:00+05:00`
       const registeredAt = `${date}T08:00:00+05:00`
+
+      slotUsage++
+      if (slotUsage >= ordersPerSlot && slotIndex < slotsCount - 1) {
+        slotIndex++
+        slotUsage = 0
+      }
 
       // Equipment requirements based on work type code or random
       let ont = 0
@@ -158,25 +170,6 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
 
     let createdCount = 0
     let errorsCount = 0
-    let deletedCount = 0
-
-    // Перегенерация: сначала удаляем существующие наряды на дату
-    if (replaceExisting) {
-      try {
-        const existing = await ordersApi.list({ date })
-        const existingList = (existing.data || []) as any[]
-        for (const ord of existingList) {
-          try {
-            await ordersApi.delete(ord.id)
-            deletedCount++
-          } catch (_) {
-            // наряд занят в плане/маршруте — пропускаем
-          }
-        }
-      } catch (_) {
-        // если получить список не удалось — не блокируем создание
-      }
-    }
 
     for (let i = 0; i < previewOrders.length; i++) {
       const ord = previewOrders[i]
@@ -214,8 +207,6 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
           },
           is_repeat: ord.is_repeat,
           isRepeat: ord.is_repeat,
-          is_generated: true,
-          isGenerated: true,
         }
 
         await ordersApi.create(payload)
@@ -236,7 +227,7 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
     if (errorsCount === 0) {
       setResultMessage({
         type: 'success',
-        text: `Готово! Создано ${createdCount} нарядов на ${date}${deletedCount > 0 ? `, удалено старых: ${deletedCount}` : ''}.`,
+        text: `Успешно создано ${createdCount} тестовых нарядов на дату ${date}!`,
       })
       setTimeout(() => {
         onSuccess?.()
@@ -345,19 +336,6 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
                 </Button>
               ))}
             </div>
-          </div>
-
-          <div className="sm:col-span-3 flex items-center gap-2 pt-1 border-t">
-            <input
-              type="checkbox"
-              id="replaceExisting"
-              checked={replaceExisting}
-              onChange={(e) => setReplaceExisting(e.target.checked)}
-              className="h-4 w-4"
-            />
-            <Label htmlFor="replaceExisting" className="text-xs cursor-pointer font-normal">
-              Удалить существующие наряды на эту дату перед созданием (перегенерация)
-            </Label>
           </div>
         </div>
 
