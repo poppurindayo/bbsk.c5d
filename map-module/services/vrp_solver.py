@@ -1,3 +1,4 @@
+import os
 import time
 from datetime import datetime
 from typing import Dict, List
@@ -6,10 +7,31 @@ from schemas.response import SolverResponse, RouteOutput, UnassignedOrderOutput
 from services.compatibility import filter_compatibility
 from services.prioritizer import sort_orders_by_priority
 from services.timeline_manager import insert_break_and_restock
+from core.matrix_loader import matrix_loader
+from core.config import settings
+
+
+def _ensure_matrix_loaded() -> None:
+    """Ленивая загрузка/перезагрузка матрицы.
+
+    Солвер грузит матрицу при старте, но бэкенд пишет файл уже после старта
+    (мастер тестовых данных). Сверяем mtime и перезагружаем, если файл новый —
+    иначе оптимизация остаётся слепой к геометрии (плоские 900 сек на все пары).
+    """
+    path = os.environ.get("TRAVEL_MATRIX_FILE_PATH", settings.TRAVEL_MATRIX_FILE_PATH)
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return
+    if (not matrix_loader.is_loaded) or (mtime != matrix_loader.last_mtime):
+        matrix_loader.load_from_file(path)
 
 
 def solve_vrptw(request: SolverRequest) -> SolverResponse:
     start_cpu_time = time.perf_counter()
+
+    # Убеждаемся, что актуальная матрица времени в пути загружена
+    _ensure_matrix_loaded()
 
     base_date = datetime.strptime(request.date, "%Y-%m-%d").replace(
         tzinfo=request.now.tzinfo
@@ -29,9 +51,22 @@ def solve_vrptw(request: SolverRequest) -> SolverResponse:
         s.staff_id: [] for s in request.staff
     }
 
+    # Кэш суммарного времени в пути по каждому сотруднику. Нужен для расчёта МАРЖИНАЛЬНОЙ
+    # (добавочной) стоимости вставки, а не абсолютной: так каждый наряд уходит географически
+    # ближайшему квалифицированному сотруднику, а маршруты остаются компактными.
+    staff_current_travel: Dict[str, int] = {s.staff_id: 0 for s in request.staff}
+
+    # Учёт назначенной нагрузки (сумма минут работ) — для равномерного распределения между
+    # сотрудниками (минимизация коэффициента вариации загрузки).
+    staff_assigned_minutes: Dict[str, int] = {s.staff_id: 0 for s in request.staff}
+
+    # Веса оптимизации (в секундах пути). По ТЗ балансировка (5%) слабее суммарного пробега (15%),
+    # поэтому вес нагрузки намеренно умеренный.
+    LOAD_WEIGHT_PER_MIN = 2.0
+
     unassigned: List[UnassignedOrderOutput] = []
 
-    # 3. Этап 3 & 4: Оптимальная вставка по дорожной сети
+    # 3. Этап 3 & 4: Оптимальная вставка по дорожной сети (маржинальная стоимость + балансировка)
     for order in sorted_orders:
         eligible_staff = compatibility.get(order.order_id, [])
 
@@ -46,43 +81,47 @@ def solve_vrptw(request: SolverRequest) -> SolverResponse:
 
         best_staff_id: str | None = None
         best_insert_pos: int = -1
-        best_added_travel_sec: int = 9999999
+        best_cost: float = float("inf")
+        best_new_travel: int = 0
 
         for staff in eligible_staff:
-            current_visits = staff_assigned_visits[staff.staff_id]
+            sid = staff.staff_id
+            current_visits = staff_assigned_visits[sid]
+            current_travel = staff_current_travel[sid]
+            # Штраф за уже накопленную нагрузку одинаков для всех позиций этого сотрудника,
+            # поэтому влияет только на ВЫБОР сотрудника, а не позиции вставки.
+            load_penalty = staff_assigned_minutes[sid] * LOAD_WEIGHT_PER_MIN
 
-            # Пробуем все позиции вставки (в конец или между визитами)
+            # Для данного сотрудника ищем позицию с минимальным суммарным путём маршрута.
+            staff_best_pos = -1
+            staff_best_new_travel = 10 ** 9
             for pos in range(len(current_visits) + 1):
                 trial_visits = current_visits[:pos] + [order] + current_visits[pos:]
-
-                # Расчет таймлайна с обедом и возвратом в депо
                 trial_stops, _ = insert_break_and_restock(
                     staff, trial_visits, request.service_centers, base_date
                 )
+                new_travel = sum(s.travel_sec for s in trial_stops)
+                if new_travel < staff_best_new_travel:
+                    staff_best_new_travel = new_travel
+                    staff_best_pos = pos
 
-                # =========================================================================
-                # MVP РЕЖИМ: Жесткие ограничения по времени слота и окончанию смены
-                # отключены/закомментированы по требованию MVP, чтобы не отбрасывать наряды.
-                # Наряды распределяются по оптимальному маршруту и квалификациям.
-                # =========================================================================
-                # if not feasible:
-                #     continue
-                # if any(stop.start > o.latest_start for stop in trial_stops ...):
-                #     continue
+            if staff_best_pos == -1:
+                continue
 
-                # Минимизируем суммарное время в пути
-                total_travel = sum(s.travel_sec for s in trial_stops)
-                # Добавляем небольшой штраф за разбалансировку нагрузки (чтобы не перегружать одного сотрудника)
-                load_penalty = len(current_visits) * 300
-                cost = total_travel + load_penalty
+            # Маржинальная (добавочная) стоимость: насколько вырастет путь сотрудника.
+            added_travel = staff_best_new_travel - current_travel
+            cost = added_travel + load_penalty
 
-                if cost < best_added_travel_sec:
-                    best_added_travel_sec = cost
-                    best_staff_id = staff.staff_id
-                    best_insert_pos = pos
+            if cost < best_cost:
+                best_cost = cost
+                best_staff_id = sid
+                best_insert_pos = staff_best_pos
+                best_new_travel = staff_best_new_travel
 
         if best_staff_id is not None and best_insert_pos != -1:
             staff_assigned_visits[best_staff_id].insert(best_insert_pos, order)
+            staff_current_travel[best_staff_id] = best_new_travel
+            staff_assigned_minutes[best_staff_id] += order.duration_min
         else:
             # Fallback (в случае отсутствия свободных мест)
             unassigned.append(

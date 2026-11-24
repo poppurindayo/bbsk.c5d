@@ -16,8 +16,8 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { Sparkles, Building2, Wifi, Users, Wrench, Download, Upload, CheckCircle2, AlertTriangle, Loader2, ArrowRight, ArrowLeft, RefreshCw, Plus, Trash2 } from 'lucide-react'
 import { useLoadReference, useLoadTravelMatrix } from '@/hooks/useApi'
 
-// Initial default seed dataset for Yekaterinburg
-const DEFAULT_SEED_DATA = {
+// Базовый набор (используется как источник types работ и fallback)
+const BASE_SEED = {
   service_centers: [
     {
       service_center_id: 'SC-01',
@@ -221,6 +221,103 @@ const DEFAULT_SEED_DATA = {
   ],
 }
 
+// ─── Генератор реалистичного эталона: Екатеринбург, 4 СЦ по районам ──────────
+// Здания кластеризуются вокруг «своего» СЦ (смещения ~200–700 м), а районы разнесены
+// на 3–7 км. Это даёт компактные маршруты (минимум перегонов) и корректную балансировку
+// по зонам: наряд достаётся ближайшему квалифицированному сотруднику своего района.
+function buildSeedData() {
+  const zones = [
+    { id: 'SC-01', name: 'СЦ «Север» (Орджоникидзевский)', address: 'ул. Победы, 30', district: 'Орджоникидзевский', street: 'ул. Победы', lat: 56.885, lon: 60.61, staff: ['Иванов Иван Иванович', 'Петров Пётр Сергеевич', 'Кузнецов Олег Иванович', 'Смирнов Дмитрий Андреевич'] },
+    { id: 'SC-02', name: 'СЦ «Юг» (Чкаловский)', address: 'ул. 8 Марта, 150', district: 'Чкаловский', street: 'ул. 8 Марта', lat: 56.8, lon: 60.605, staff: ['Сидоров Алексей Михайлович', 'Морозов Игорь Валерьевич', 'Волков Сергей Николаевич', 'Зайцев Павел Олегович'] },
+    { id: 'SC-03', name: 'СЦ «Восток» (Кировский)', address: 'ул. Луначарского, 80', district: 'Кировский', street: 'ул. Луначарского', lat: 56.85, lon: 60.69, staff: ['Павлов Роман Викторович', 'Орлов Денис Алексеевич', 'Макаров Илья Сергеевич', 'Фролов Антон Игоревич'] },
+    { id: 'SC-04', name: 'СЦ «Запад» (Верх-Исетский)', address: 'ул. Толмачёва, 20', district: 'Верх-Исетский', street: 'ул. Толмачёва', lat: 56.855, lon: 60.535, staff: ['Егоров Максим Павлович', 'Никитин Артём Валерьевич', 'Беляев Кирилл Дмитриевич', 'Гусев Никита Олегович'] },
+  ]
+
+  // Смещения (deg) для кластеризации зданий вокруг СЦ — примерно 200–700 м
+  const offsets: Array<[number, number]> = [
+    [0.002, 0.001], [0.0038, -0.0016], [0.0011, 0.0032], [-0.0026, 0.0021],
+    [0.0042, 0.0026], [-0.0031, -0.0022], [0.0016, -0.0033], [0.0052, -0.0011],
+    [-0.0017, 0.0043], [0.0027, 0.0048], [-0.0042, 0.0012], [0.0033, -0.0044],
+    [0.0058, 0.0013], [-0.0052, 0.0032], [0.0012, -0.0052], [0.0047, 0.0037],
+  ]
+
+  const service_centers = zones.map((z) => ({
+    service_center_id: z.id,
+    name: z.name,
+    address: z.address,
+    lat: z.lat,
+    lon: z.lon,
+    opening_hours: { open: '08:00', close: '21:00' },
+    restock_duration_min: 15,
+  }))
+
+  const access_nodes: any[] = []
+  const staff: any[] = []
+  let buildingCounter = 0
+
+  zones.forEach((z, zi) => {
+    // 2 узла доступа на район: PON (OLT) и FTTB (SWITCH)
+    for (let n = 0; n < 2; n++) {
+      const tech = n === 0 ? 'PON' : 'FTTB'
+      const nodeType = n === 0 ? 'OLT' : 'SWITCH'
+      const buildings: any[] = []
+
+      // 4 здания на узел, кластером вокруг СЦ
+      for (let b = 0; b < 4; b++) {
+        const off = offsets[(zi * 8 + n * 4 + b) % offsets.length]
+        buildingCounter += 1
+        const isPrivate = tech === 'FTTB' && b >= 2
+        buildings.push({
+          building_id: `B-${String(buildingCounter).padStart(3, '0')}`,
+          address: `${z.street}, ${b + 1}`,
+          lat: +(z.lat + off[0]).toFixed(6),
+          lon: +(z.lon + off[1]).toFixed(6),
+          building_type: isPrivate ? 'PRIVATE' : 'MKD',
+          overhead_line: isPrivate,
+          zone_service_center_id: z.id,
+        })
+      }
+
+      access_nodes.push({
+        access_node_id: `AN-${String(zi * 2 + n + 1).padStart(3, '0')}`,
+        node_type: nodeType,
+        technology: tech,
+        name: `${nodeType} ${z.district}-${n + 1}`,
+        address: `${z.street}, ${n + 1}`,
+        lat: +(z.lat + (n === 0 ? 0.0008 : -0.0008)).toFixed(6),
+        lon: +(z.lon + (n === 0 ? 0.0008 : -0.0008)).toFixed(6),
+        buildings,
+      })
+    }
+
+    // 4 сотрудника на район: 2 инсталлятора + 2 3ЛТП
+    for (let s = 0; s < 4; s++) {
+      const isInstaller = s < 2
+      staff.push({
+        staff_id: `TECH-${String(staff.length + 1).padStart(2, '0')}`,
+        name: z.staff[s],
+        service_center_id: z.id,
+        shift: {
+          start: s % 2 === 0 ? '08:00' : '09:00',
+          end: s % 2 === 0 ? '20:00' : '18:00',
+          break_duration_min: 60,
+          break_window: { from: '12:00', to: '15:00' },
+        },
+        profiles: [isInstaller ? 'INSTALL' : 'LTP3'],
+        technologies: ['PON', 'FTTB'],
+        equipment_start: { ONT: 4, ROUTER: 3, STB: 2 },
+        equipment_capacity: { ONT: 6, ROUTER: 5, STB: 4 },
+        height_permit: s === 1 || s === 2,
+        experience_years: 2 + s,
+      })
+    }
+  })
+
+  return { service_centers, access_nodes, staff, work_types: BASE_SEED.work_types }
+}
+
+const DEFAULT_SEED_DATA = buildSeedData()
+
 interface TestDataWizardModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -266,8 +363,8 @@ export const TestDataWizardModal: React.FC<TestDataWizardModalProps> = ({
       pointsList.push({ code: sc.service_center_id, lat: sc.lat, lon: sc.lon })
     })
 
-    dataset.access_nodes.forEach((an) => {
-      an.buildings.forEach((b) => {
+    dataset.access_nodes.forEach((an: any) => {
+      an.buildings.forEach((b: any) => {
         pointsList.push({ code: b.building_id, lat: b.lat, lon: b.lon })
       })
     })
@@ -342,8 +439,8 @@ export const TestDataWizardModal: React.FC<TestDataWizardModalProps> = ({
     downloadAnchor.remove()
   }
 
-  const allBuildings = dataset.access_nodes.flatMap((an) =>
-    an.buildings.map((b) => ({ ...b, access_node_id: an.access_node_id }))
+  const allBuildings = dataset.access_nodes.flatMap((an: any) =>
+    an.buildings.map((b: any) => ({ ...b, access_node_id: an.access_node_id }))
   )
 
   return (

@@ -59,6 +59,7 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
   const [date, setDate] = useState<string>(targetDate || new Date().toISOString().split('T')[0])
   const [count, setCount] = useState<number>(10)
   const [repeatRatio, setRepeatRatio] = useState<number>(10) // percent
+  const [replaceExisting, setReplaceExisting] = useState<boolean>(true)
   const [previewOrders, setPreviewOrders] = useState<GeneratedOrder[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
@@ -157,6 +158,25 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
 
     let createdCount = 0
     let errorsCount = 0
+    let deletedCount = 0
+
+    // Перегенерация: сначала удаляем существующие наряды на дату
+    if (replaceExisting) {
+      try {
+        const existing = await ordersApi.list({ date })
+        const existingList = (existing.data || []) as any[]
+        for (const ord of existingList) {
+          try {
+            await ordersApi.delete(ord.id)
+            deletedCount++
+          } catch (_) {
+            // наряд занят в плане/маршруте — пропускаем
+          }
+        }
+      } catch (_) {
+        // если получить список не удалось — не блокируем создание
+      }
+    }
 
     for (let i = 0; i < previewOrders.length; i++) {
       const ord = previewOrders[i]
@@ -214,7 +234,7 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
     if (errorsCount === 0) {
       setResultMessage({
         type: 'success',
-        text: `Успешно создано ${createdCount} тестовых нарядов на дату ${date}!`,
+        text: `Готово! Создано ${createdCount} нарядов на ${date}${deletedCount > 0 ? `, удалено старых: ${deletedCount}` : ''}.`,
       })
       setTimeout(() => {
         onSuccess?.()
@@ -323,6 +343,19 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
                 </Button>
               ))}
             </div>
+          </div>
+
+          <div className="sm:col-span-3 flex items-center gap-2 pt-1 border-t">
+            <input
+              type="checkbox"
+              id="replaceExisting"
+              checked={replaceExisting}
+              onChange={(e) => setReplaceExisting(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <Label htmlFor="replaceExisting" className="text-xs cursor-pointer font-normal">
+              Удалить существующие наряды на эту дату перед созданием (перегенерация)
+            </Label>
           </div>
         </div>
 
