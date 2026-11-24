@@ -54,7 +54,7 @@ function formatMinutesToTime(mins: number): string {
 
 function buildTimeRange(routes: Route[]): TimeRange {
   let minMin = 8 * 60
-  let maxMin = 20 * 60
+  let maxMin = 23 * 60
 
   for (const route of routes) {
     for (const stop of route.stops || []) {

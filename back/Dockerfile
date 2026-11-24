@@ -49,4 +49,6 @@ USER appuser
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
+# -Duser.timezone=Asia/Yekaterinburg — все времена (смены, слоты) в UTC+5 по ТЗ,
+# иначе OffsetDateTime отдаётся в UTC и фронт показывает 04:00 вместо 09:00.
+ENTRYPOINT ["java", "-Duser.timezone=Asia/Yekaterinburg", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]

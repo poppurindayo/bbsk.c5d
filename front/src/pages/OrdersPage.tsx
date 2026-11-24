@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -10,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog'
-import { Plus, Search, Loader2, Eye, Filter, RefreshCw, CheckCircle2, AlertTriangle, Calendar, Building2, Wand2, Clock, Sparkles } from 'lucide-react'
+import { Plus, Search, Loader2, Eye, Filter, RefreshCw, CheckCircle2, AlertTriangle, Calendar, Building2, Wand2, Clock, Sparkles, Trash2, X } from 'lucide-react'
 import { useOrders, useCreateOrder, useWorkTypes, useBuildings, useServiceCenters } from '@/hooks/useApi'
+import { ordersApi } from '@/api/client'
 import { useDayStore } from '@/store/dayStore'
 import { TestOrdersGeneratorModal } from '@/components/orders/TestOrdersGeneratorModal'
 import { format } from 'date-fns'
@@ -43,6 +45,7 @@ const PRESET_SLOTS = [
 
 export const OrdersPage = () => {
   const { currentDate, setCurrentDate, selectedServiceCenterId, setSelectedServiceCenterId } = useDayStore()
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [filterAllDates, setFilterAllDates] = useState(false)
@@ -50,6 +53,8 @@ export const OrdersPage = () => {
   const [generatorOpen, setGeneratorOpen] = useState(false)
   const [viewOrder, setViewOrder] = useState<any>(null)
   const [formError, setFormError] = useState<string>('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // Slot time state for user-friendly picker
   const [slotTimeStart, setSlotTimeStart] = useState('09:00')

@@ -1,14 +1,60 @@
 import os
 import time
-from datetime import datetime
-from typing import Dict, List
-from schemas.request import SolverRequest, OrderInput
-from schemas.response import SolverResponse, RouteOutput, UnassignedOrderOutput
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Tuple
+from schemas.request import SolverRequest, OrderInput, StaffInput
+from schemas.response import SolverResponse, RouteOutput, UnassignedOrderOutput, StopOutput
 from services.compatibility import filter_compatibility
 from services.prioritizer import sort_orders_by_priority
-from services.timeline_manager import insert_break_and_restock
+from services.timeline_manager import insert_break_and_restock, combine_date_time, parse_time_str
 from core.matrix_loader import matrix_loader
 from core.config import settings
+
+
+def _check_route_feasibility(
+    staff: StaffInput,
+    trial_stops: List[StopOutput],
+    trial_visits: List[OrderInput],
+    base_date: datetime
+) -> Tuple[bool, str | None]:
+    """Проверка жёстких ограничений H2/H3/H4 для ВСЕГО варианта маршрута.
+
+    Проверяются все визиты (а не только новый), т.к. вставка сдвигает существующие.
+    Возвращает (ok, reason). reason — код причины для unassigned, если не ok.
+    """
+    shift = staff.shift
+    shift_end_dt = combine_date_time(base_date, parse_time_str(shift.end))
+    break_from_dt = combine_date_time(base_date, parse_time_str(shift.break_window.from_time))
+    break_to_dt = combine_date_time(base_date, parse_time_str(shift.break_window.to_time))
+
+    # H2: возврат в СЦ не позже конца смены
+    depot_end = next((s for s in trial_stops if s.type == "DEPOT_END"), None)
+    if depot_end is not None and depot_end.arrival > shift_end_dt:
+        return False, "NO_SHIFT_TIME"
+
+    visit_stops = [s for s in trial_stops if s.type == "VISIT"]
+
+    # H3: если есть визиты — ровно один BREAK нужной длительности в окне перерыва
+    if visit_stops:
+        breaks = [s for s in trial_stops if s.type == "BREAK"]
+        if len(breaks) != 1:
+            return False, "NO_SHIFT_TIME"
+        b = breaks[0]
+        if (b.end - b.start) < timedelta(minutes=shift.break_duration_min):
+            return False, "NO_SHIFT_TIME"
+        if b.start < break_from_dt or b.end > break_to_dt:
+            return False, "NO_SHIFT_TIME"
+
+    # H4: старт каждого визита строго внутри [slot.start, latest_start]
+    visit_by_order = {v.order_id: v for v in trial_visits}
+    for s in visit_stops:
+        o = visit_by_order.get(s.order_id)
+        if o is None:
+            continue
+        if s.start < o.slot.start or s.start > o.latest_start:
+            return False, "SLOT_UNREACHABLE"
+
+    return True, None
 
 
 def _ensure_matrix_loaded() -> None:
@@ -33,9 +79,11 @@ def solve_vrptw(request: SolverRequest) -> SolverResponse:
     # Убеждаемся, что актуальная матрица времени в пути загружена
     _ensure_matrix_loaded()
 
-    base_date = datetime.strptime(request.date, "%Y-%m-%d").replace(
-        tzinfo=request.now.tzinfo
-    )
+    # Все времена смены — местные (UTC+5, Екатеринбург) по ТЗ. Приводим base_date
+    # к +05:00 явно, а не берём tzinfo из request.now (он может прийти в UTC из БД,
+                    # из-за чего смены съезжали на +5ч, а слоты оказывались "до смены" → SLOT_UNREACHABLE).
+    EKB_TZ = timezone(timedelta(hours=5))
+    base_date = datetime.strptime(request.date, "%Y-%m-%d").replace(tzinfo=EKB_TZ)
 
     # 1. Этап 1: Фильтрация по жестким допускам (H1: профиль, технология, допуск на высоту)
     compatibility = filter_compatibility(request.staff, request.orders)
@@ -83,6 +131,8 @@ def solve_vrptw(request: SolverRequest) -> SolverResponse:
         best_insert_pos: int = -1
         best_cost: float = float("inf")
         best_new_travel: int = 0
+        # Причина невключения, если ни одна вставка не прошла жёсткие ограничения
+        best_failure_reason: str | None = None
 
         for staff in eligible_staff:
             sid = staff.staff_id
@@ -109,7 +159,8 @@ def solve_vrptw(request: SolverRequest) -> SolverResponse:
                 candidate_positions.add(nearest_idx)
                 candidate_positions.add(min(n, nearest_idx + 1))
 
-            # Для данного сотрудника ищем позицию с минимальным суммарным путём маршрута.
+            # Для данного сотрудника ищем позицию с минимальным суммарным путём маршрута,
+            # но ТОЛЬКО среди позиций, проходящих жёсткие ограничения H2/H3/H4.
             staff_best_pos = -1
             staff_best_new_travel = 10 ** 9
             for pos in candidate_positions:
@@ -117,6 +168,12 @@ def solve_vrptw(request: SolverRequest) -> SolverResponse:
                 trial_stops, _ = insert_break_and_restock(
                     staff, trial_visits, request.service_centers, base_date
                 )
+                ok, reason = _check_route_feasibility(staff, trial_stops, trial_visits, base_date)
+                if not ok:
+                    # Запоминаем причину (SLOT_UNREACHABLE приоритетнее — это ключевая метрика)
+                    if reason == "SLOT_UNREACHABLE" or best_failure_reason is None:
+                        best_failure_reason = reason
+                    continue
                 new_travel = sum(s.travel_sec for s in trial_stops)
                 if new_travel < staff_best_new_travel:
                     staff_best_new_travel = new_travel
@@ -140,11 +197,11 @@ def solve_vrptw(request: SolverRequest) -> SolverResponse:
             staff_current_travel[best_staff_id] = best_new_travel
             staff_assigned_minutes[best_staff_id] += order.duration_min
         else:
-            # Fallback (в случае отсутствия свободных мест)
+            # Не удалось уложить наряд в слот/смену ни у одного сотрудника
             unassigned.append(
                 UnassignedOrderOutput(
                     order_id=order.order_id,
-                    reason="NO_QUALIFIED_STAFF"
+                    reason=best_failure_reason or "NO_QUALIFIED_STAFF"
                 )
             )
 
@@ -170,7 +227,9 @@ def solve_vrptw(request: SolverRequest) -> SolverResponse:
                         new_stops, _ = insert_break_and_restock(
                             staff, new_visits, request.service_centers, base_date
                         )
-                        if sum(s.travel_sec for s in new_stops) < old_travel:
+                        # Принимаем перестановку только если она не нарушает H2/H3/H4
+                        ok, _ = _check_route_feasibility(staff, new_stops, new_visits, base_date)
+                        if ok and sum(s.travel_sec for s in new_stops) < old_travel:
                             visits = new_visits
                             staff_assigned_visits[staff_id] = new_visits
                             improved = True
