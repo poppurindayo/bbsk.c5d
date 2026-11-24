@@ -42,6 +42,7 @@ import {
 } from '@/hooks/useApi'
 import { useDayStore } from '@/store/dayStore'
 import { TestOrdersGeneratorModal } from '@/components/orders/TestOrdersGeneratorModal'
+import { GanttChart } from '@/components/gantt/GanttChart'
 
 const STANDARD_SLOTS = [
   { start: '09:00', end: '11:00', label: '09:00 – 11:00' },
@@ -807,12 +808,21 @@ export const DayPlanningPage = () => {
 
               {/* Plan Sub Tabs */}
               <Tabs value={planSubTab} onValueChange={setPlanSubTab} className="space-y-4">
-                <TabsList className="grid grid-cols-4 max-w-xl text-xs h-9">
+                <TabsList className="grid grid-cols-5 max-w-xl text-xs h-9">
                   <TabsTrigger value="routes">Маршруты ({filteredRoutes.length})</TabsTrigger>
+                  <TabsTrigger value="gantt">Гант</TabsTrigger>
                   <TabsTrigger value="unassigned">Не распределено ({plan.unassignedOrders?.length || 0})</TabsTrigger>
                   <TabsTrigger value="alerts">Алерты ({plan.alerts?.length || 0})</TabsTrigger>
                   <TabsTrigger value="pgp">ПГП ({plan.metrics?.pgpOrders ?? 0})</TabsTrigger>
                 </TabsList>
+
+                {/* SubTab: Gantt Chart */}
+                <TabsContent value="gantt" className="space-y-4">
+                  <GanttChart
+                    routes={filteredRoutes}
+                    modelNow={dayData?.currentNow || (modelNowTime ? `${currentDate}T${modelNowTime}:00+05:00` : undefined)}
+                  />
+                </TabsContent>
 
                 {/* SubTab: Routes */}
                 <TabsContent value="routes" className="space-y-4">
