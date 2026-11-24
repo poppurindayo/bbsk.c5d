@@ -73,6 +73,31 @@ def _ensure_matrix_loaded() -> None:
         matrix_loader.load_from_file(path)
 
 
+# Наряд обслуживает только сотрудники СЦ своей зоны ответственности.
+# Если в зоне наряд не вмещается в смену/слот, он остаётся нераспределённым (диспетчер решает
+# сам), а не уезжает на другой конец города к сотруднику чужого района.
+RESTRICT_TO_HOME_ZONE = True
+
+
+def _home_service_center_id(building_id: str, service_centers: list) -> str | None:
+    """Зона ответственности наряда = СЦ, ближайший к зданию по матрице времени в пути.
+
+    Возвращает None, если зону достоверно определить нельзя (матрица не загружена или не
+    содержит точку здания/СЦ — тогда все расстояния «плоские» и выбор был бы случайным).
+    """
+    if not matrix_loader.is_loaded or building_id not in matrix_loader.point_to_idx:
+        return None
+    best_id: str | None = None
+    best_sec: int | None = None
+    for sc in service_centers:
+        if sc.building_id not in matrix_loader.point_to_idx:
+            return None
+        sec, _ = matrix_loader.get_travel(building_id, sc.building_id, None)
+        if best_sec is None or sec < best_sec:
+            best_id, best_sec = sc.id, sec
+    return best_id
+
+
 def solve_vrptw(request: SolverRequest) -> SolverResponse:
     start_cpu_time = time.perf_counter()
 
@@ -93,6 +118,7 @@ def solve_vrptw(request: SolverRequest) -> SolverResponse:
 
     # Карты для быстрого доступа
     staff_map = {s.staff_id: s for s in request.staff}
+    home_zone_cache: Dict[str, str | None] = {}
 
     # Инициализация распределения: staff_id -> list[OrderInput]
     staff_assigned_visits: Dict[str, List[OrderInput]] = {
@@ -117,6 +143,19 @@ def solve_vrptw(request: SolverRequest) -> SolverResponse:
     # 3. Этап 3 & 4: Оптимальная вставка по дорожной сети (маржинальная стоимость + балансировка)
     for order in sorted_orders:
         eligible_staff = compatibility.get(order.order_id, [])
+
+        # Зона ответственности: берём только сотрудников СЦ зоны наряда. Если в зоне нет
+        # подходящих по квалификации (H1) — не блокируем наряд, разрешаем остальных.
+        if RESTRICT_TO_HOME_ZONE and eligible_staff:
+            if order.building_id not in home_zone_cache:
+                home_zone_cache[order.building_id] = _home_service_center_id(
+                    order.building_id, request.service_centers
+                )
+            home_sc = home_zone_cache[order.building_id]
+            if home_sc is not None:
+                local_staff = [s for s in eligible_staff if s.service_center_id == home_sc]
+                if local_staff:
+                    eligible_staff = local_staff
 
         if not eligible_staff:
             unassigned.append(
