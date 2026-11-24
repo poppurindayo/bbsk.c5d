@@ -33,7 +33,24 @@ class SecurityConfig(
                     .requestMatchers("/api/v1/health").permitAll()
                     .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                     .requestMatchers("/auth/**", "/api/auth/**").permitAll()
-                    .anyRequest().permitAll()
+                    // Reference / НСИ — только ADMIN
+                    .requestMatchers("/api/v1/reference/**").hasRole("ADMIN")
+                    // Staff CRUD — только ADMIN
+                    .requestMatchers("/api/v1/staff/**").hasRole("ADMIN")
+                    // Buildings / Service Centers / Access Nodes — только ADMIN
+                    .requestMatchers("/api/v1/buildings/**").hasRole("ADMIN")
+                    // Work Types — только ADMIN
+                    .requestMatchers("/api/v1/work-types/**").hasRole("ADMIN")
+                    // Days init / events — DISPATCHER и ADMIN
+                    .requestMatchers("/api/v1/days/*/events").hasAnyRole("DISPATCHER", "ADMIN")
+                    .requestMatchers("/api/v1/days/*/plan").hasAnyRole("DISPATCHER", "ADMIN")
+                    .requestMatchers("/api/v1/days/*").hasAnyRole("DISPATCHER", "ADMIN")
+                    // Orders — DISPATCHER и ADMIN
+                    .requestMatchers("/api/v1/orders/**").hasAnyRole("DISPATCHER", "ADMIN")
+                    // Solver — DISPATCHER и ADMIN
+                    .requestMatchers("/api/v1/solver/**").hasAnyRole("DISPATCHER", "ADMIN")
+                    // Everything else requires authentication
+                    .anyRequest().authenticated()
             }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
 

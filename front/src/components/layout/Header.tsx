@@ -7,16 +7,17 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { useAuthStore } from '@/store/authStore'
 import { useDayStore } from '@/store/dayStore'
 import { useServiceCenters } from '@/hooks/useApi'
+import { useLogout } from '@/hooks/useAuth'
 
 export const Header = ({ onMenuClick }: { onMenuClick: () => void }) => {
-  const { user, logout } = useAuthStore()
+  const { user } = useAuthStore()
   const { currentDate, setCurrentDate, selectedServiceCenterId, setSelectedServiceCenterId } = useDayStore()
   const { data: serviceCenters = [] } = useServiceCenters()
+  const logout = useLogout()
   const navigate = useNavigate()
 
   const handleLogout = () => {
-    logout()
-    navigate('/login')
+    logout.mutate()
   }
 
   return (
@@ -28,25 +29,25 @@ export const Header = ({ onMenuClick }: { onMenuClick: () => void }) => {
           </svg>
         </Button>
 
-        {/* Home / Logo button - Clicking returns to Dashboard */}
+        {/* Home / Logo button */}
         <Link
           to="/"
           className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-accent/60 transition-colors group cursor-pointer mr-1"
-          title="Вернуться на главный экран (Дашборд)"
+          title="Вернуться на главный экран"
         >
           <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-black text-sm shadow-sm group-hover:scale-105 transition-transform">
             BBSK
           </div>
           <div className="hidden sm:flex flex-col text-left">
             <span className="font-bold text-sm leading-tight text-foreground flex items-center gap-1">
-              Диспетчер
+              {user?.role === 'ADMIN' ? 'Админ' : 'Диспетчер'}
               <Home className="h-3 w-3 text-muted-foreground group-hover:text-primary transition-colors" />
             </span>
             <span className="text-[10px] text-muted-foreground leading-none">Главный экран</span>
           </div>
         </Link>
 
-        {/* Service Center Selector (Dispatcher Requirement 4a) */}
+        {/* Service Center Selector */}
         <div className="flex items-center gap-2">
           <Building2 className="h-4 w-4 text-primary hidden md:inline-block" />
           <div className="w-[180px] sm:w-[220px]">
@@ -120,10 +121,12 @@ export const Header = ({ onMenuClick }: { onMenuClick: () => void }) => {
               <Home className="mr-2 h-4 w-4" />
               Главный экран
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/admin')}>
-              <Building2 className="mr-2 h-4 w-4" />
-              Панель администратора
-            </DropdownMenuItem>
+            {user?.role === 'ADMIN' && (
+              <DropdownMenuItem onClick={() => navigate('/admin')}>
+                <Building2 className="mr-2 h-4 w-4" />
+                Панель администратора
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
               <LogOut className="mr-2 h-4 w-4" />
