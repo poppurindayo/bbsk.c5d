@@ -56,6 +56,21 @@ class ShiftService(
     }
 
     @Transactional
+    fun update(id: UUID, request: CreateShiftRequest): ShiftResponse {
+        val shift = shiftRepository.findById(id).orElseThrow {
+            NotFoundException("SHIFT_NOT_FOUND", "График смены с id '$id' не найден")
+        }
+
+        shift.startTime = request.start
+        shift.endTime = request.end
+        shift.breakDurationMin = request.breakDurationMin
+        shift.breakWindowFrom = request.breakWindow.from
+        shift.breakWindowTo = request.breakWindow.to
+
+        return shiftRepository.save(shift).toDto()
+    }
+
+    @Transactional
     fun delete(id: UUID) {
         val shift = shiftRepository.findById(id).orElseThrow {
             NotFoundException("SHIFT_NOT_FOUND", "График смены с id '$id' не найден")

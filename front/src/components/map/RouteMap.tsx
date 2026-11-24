@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Building2, Navigation, Layers, Clock, Package, AlertCircle } from 'lucide-react'
 import type { Route, RouteStop, ServiceCenter, Building, AccessNode } from '@/types/api'
+import { formatClock } from '@/utils/time'
 
 // Palette for brigade routes
 export const ROUTE_COLORS = [
@@ -453,7 +454,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
                         <div className="p-1 text-xs space-y-1.5 min-w-[210px]">
                           <div className="flex items-center justify-between border-b pb-1">
                             <span className="font-bold text-sm" style={{ color: route.color }}>
-                              Бригада {route.staffCode}
+                              {route.staffName || `Бригада ${route.staffCode}`}
                             </span>
                             <Badge variant={stop.type === 'VISIT' ? 'default' : 'secondary'}>
                               {stop.type}
@@ -471,13 +472,13 @@ export const RouteMap: React.FC<RouteMapProps> = ({
                             <div>
                               <span className="text-muted-foreground">Прибытие:</span>{' '}
                               <span className="font-medium">
-                                {stop.arrival ? stop.arrival.substring(11, 16) : '—'}
+                                {formatClock(stop.arrival, '—')}
                               </span>
                             </div>
                             <div>
                               <span className="text-muted-foreground">Окончание:</span>{' '}
                               <span className="font-medium">
-                                {stop.endTime ? stop.endTime.substring(11, 16) : '—'}
+                                {formatClock(stop.endTime, '—')}
                               </span>
                             </div>
                             <div>
@@ -511,7 +512,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
                         </div>
                       </Popup>
                       <Tooltip direction="top" offset={[0, -12]}>
-                        #{stop.seq} {stop.orderId || stop.locationCode} ({route.staffCode})
+                        #{stop.seq} {stop.orderId || stop.locationCode} · {route.staffName || route.staffCode}
                       </Tooltip>
                     </Marker>
                   )

@@ -14,6 +14,7 @@ import { Zap, Clock, UserMinus, XCircle, AlertTriangle, ArrowRight, Loader2, Che
 import { useCreateEvent, usePlan, useOrders, useStaff } from '@/hooks/useApi'
 import { useDayStore } from '@/store/dayStore'
 import { format } from 'date-fns'
+import { formatClockSeconds } from '@/utils/time'
 
 const eventSchema = z.object({
   type: z.enum(['ORDER_CANCELLED', 'NEW_ORDER', 'STAFF_UNAVAILABLE', 'ORDER_TRANSFERRED', 'VISIT_DELAYED', 'TIME_TICK']),
@@ -279,7 +280,7 @@ export const EventsPage = () => {
                     <span className="text-muted-foreground">Обработано в:</span>{' '}
                     <strong>
                       {successResult.processed_at || successResult.processedAt
-                        ? (successResult.processed_at || successResult.processedAt).substring(11, 19)
+                        ? formatClockSeconds(successResult.processed_at || successResult.processedAt)
                         : '—'}
                     </strong>
                   </div>

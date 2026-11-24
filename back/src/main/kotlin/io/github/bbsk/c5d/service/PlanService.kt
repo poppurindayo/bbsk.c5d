@@ -43,6 +43,22 @@ class PlanService(
 
         val allOrders = workOrderRepository.findAllByDayId(day.id)
 
+        // ВАЖНО: перед детекцией ПГП удаляем старые PGP-группы И алерты дня. Их коды детерминированы
+        // (PGP-<дата>-<узел>-N и ALT-PGP-...), а pgpDetector создаёт новые с теми же кодами. Без
+        // предварительного удаления существующие строки вызывают нарушение уникальных ограничений
+        // pgp_group_code_key и alert_code_key при flush.
+        val existingPgpGroups = pgpGroupRepository.findAllByDayId(day.id)
+        if (existingPgpGroups.isNotEmpty()) {
+            pgpGroupRepository.deleteAll(existingPgpGroups)
+        }
+        val existingAlerts = alertRepository.findAllByDayId(day.id)
+        if (existingAlerts.isNotEmpty()) {
+            alertRepository.deleteAll(existingAlerts)
+        }
+        if (existingPgpGroups.isNotEmpty() || existingAlerts.isNotEmpty()) {
+            alertRepository.flush()
+        }
+
         // 1. Детекция ПГП (H9)
         val pgpResult = pgpDetectorService.detect(day, allOrders, day.currentNow)
         if (pgpResult.groups.isNotEmpty()) {
@@ -142,12 +158,6 @@ class PlanService(
         val existingUnassigned = unassignedOrderRepository.findAllByDayId(day.id)
         unassignedOrderRepository.deleteAll(existingUnassigned)
         unassignedOrderRepository.flush()
-
-        val existingLateAlerts = alertRepository.findAllByDayId(day.id).filter { it.type == AlertType.LATE_RISK }
-        if (existingLateAlerts.isNotEmpty()) {
-            alertRepository.deleteAll(existingLateAlerts)
-            alertRepository.flush()
-        }
 
         // 7. Сохранение результатов оптимизации
         val savedRoutes = mutableListOf<Route>()

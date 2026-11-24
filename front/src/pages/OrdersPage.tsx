@@ -10,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog'
-import { Plus, Search, Loader2, Eye, Filter, RefreshCw, CheckCircle2, AlertTriangle, Calendar, Building2, Wand2, Clock, Sparkles } from 'lucide-react'
-import { useOrders, useCreateOrder, useWorkTypes, useBuildings, useServiceCenters } from '@/hooks/useApi'
+import { Plus, Search, Loader2, Eye, Filter, RefreshCw, CheckCircle2, AlertTriangle, Calendar, Building2, Wand2, Clock, Sparkles, Check, Minus, Trash2, Edit } from 'lucide-react'
+import { useOrders, useCreateOrder, useWorkTypes, useBuildings, useServiceCenters, useDeleteOrder, useUpdateOrder } from '@/hooks/useApi'
 import { useDayStore } from '@/store/dayStore'
 import { TestOrdersGeneratorModal } from '@/components/orders/TestOrdersGeneratorModal'
 import { format } from 'date-fns'
+import { formatClock } from '@/utils/time'
 
 const orderSchema = z.object({
   orderId: z.string().regex(/^ORD-[0-9]{8}-[0-9]{4}$/, 'Формат: ORD-ГГГГММДД-ЧЧЧЧ (напр. ORD-20261026-0001)'),
@@ -49,6 +50,7 @@ export const OrdersPage = () => {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [generatorOpen, setGeneratorOpen] = useState(false)
   const [viewOrder, setViewOrder] = useState<any>(null)
+  const [editOrder, setEditOrder] = useState<any>(null)
   const [formError, setFormError] = useState<string>('')
 
   // Slot time state for user-friendly picker
@@ -64,6 +66,8 @@ export const OrdersPage = () => {
   const { data: buildings = [] } = useBuildings()
   const { data: serviceCenters = [] } = useServiceCenters()
   const createOrder = useCreateOrder()
+  const deleteOrder = useDeleteOrder()
+  const updateOrder = useUpdateOrder()
 
   // Generate unique order ID in format ORD-YYYYMMDD-XXXX
   const generateOrderId = (dateStr: string) => {
@@ -125,6 +129,39 @@ export const OrdersPage = () => {
     setDialogOpen(true)
   }
 
+  const openEditDialog = (order: any) => {
+    setFormError('')
+    const bldId = order.building_id || order.buildingId
+    const bld = buildingMap.get(bldId)
+    const wtId = order.work_type_id || order.workTypeId
+    const wt = workTypeMap.get(wtId)
+
+    const slotStart = order.slot_start || order.slotStart
+    const slotEnd = order.slot_end || order.slotEnd
+    const slotTimeStart = formatClock(slotStart, '09:00')
+    const slotTimeEnd = formatClock(slotEnd, '11:00')
+
+    const dayId = order.day_date || order.dayDate || order.day_id || order.dayId || currentDate
+
+    setSlotTimeStart(slotTimeStart)
+    setSlotTimeEnd(slotTimeEnd)
+    form.reset({
+      orderId: order.order_id || order.orderId || order.code || '',
+      dayId: dayId,
+      workTypeId: wt?.id || order.work_type_id || order.workTypeId || '',
+      buildingId: bld?.id || order.building_id || order.buildingId || '',
+      registeredAt: order.registered_at || order.registeredAt || `${dayId}T08:00:00+05:00`,
+      slotStart: slotStart || `${dayId}T${slotTimeStart}:00+05:00`,
+      slotEnd: slotEnd || `${dayId}T${slotTimeEnd}:00+05:00`,
+      requiredEquipmentOnt: order.required_ont ?? order.requiredOnt ?? order.required_equipment?.ONT ?? order.requiredEquipment?.ont ?? 0,
+      requiredEquipmentRouter: order.required_router ?? order.requiredRouter ?? order.required_equipment?.ROUTER ?? order.requiredEquipment?.router ?? 0,
+      requiredEquipmentStb: order.required_stb ?? order.requiredStb ?? order.required_equipment?.STB ?? order.requiredEquipment?.stb ?? 0,
+      isRepeat: order.is_repeat ?? order.isRepeat ?? false,
+    })
+    setEditOrder(order)
+    setDialogOpen(true)
+  }
+
   const onSubmit = (data: OrderForm) => {
     setFormError('')
     const payload = {
@@ -158,13 +195,18 @@ export const OrdersPage = () => {
       isRepeat: data.isRepeat,
     }
 
-    createOrder.mutate(payload, {
+    const isEditing = !!editOrder
+    const mutation = isEditing ? updateOrder : createOrder
+    const orderId = editOrder?.id
+
+    mutation.mutate(isEditing ? { id: orderId, data: payload } : payload, {
       onSuccess: () => {
         setDialogOpen(false)
+        setEditOrder(null)
         refetch()
       },
       onError: (err: any) => {
-        setFormError(err.response?.data?.message || err.message || 'Ошибка создания наряда')
+        setFormError(err.response?.data?.message || err.message || (isEditing ? 'Ошибка обновления наряда' : 'Ошибка создания наряда'))
       },
     })
   }
@@ -235,6 +277,50 @@ export const OrdersPage = () => {
       )
     })
   }, [orders, selectedServiceCenterId, serviceCenters, search, buildingMap, workTypeMap])
+
+  // Bulk delete state
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
+  const isAllSelected = filteredOrders.length > 0 && filteredOrders.every((o: any) => selectedOrderIds.has(o.id))
+
+  const toggleOrderSelection = (orderId: string) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(orderId)) {
+        next.delete(orderId)
+      } else {
+        next.add(orderId)
+      }
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedOrderIds(new Set())
+    } else {
+      setSelectedOrderIds(new Set(filteredOrders.map((o: any) => o.id)))
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedOrderIds.size === 0) return
+    if (!window.confirm(`Удалить ${selectedOrderIds.size} наряд(ов)? Это действие нельзя отменить.`)) return
+
+    let successCount = 0
+    for (const orderId of selectedOrderIds) {
+      try {
+        await deleteOrder.mutateAsync(orderId)
+        successCount++
+      } catch (err) {
+        console.error('Failed to delete order:', orderId, err)
+      }
+    }
+    setSelectedOrderIds(new Set())
+    refetch()
+    if (successCount > 0) {
+      alert(`Успешно удалено ${successCount} наряд(ов)`)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -329,6 +415,29 @@ export const OrdersPage = () => {
                 {filterAllDates ? 'Все даты' : 'Только день'}
               </Button>
 
+              {/* Bulk delete button */}
+              {selectedOrderIds.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                  className="gap-1.5"
+                  disabled={deleteOrder.isPending}
+                >
+                  {deleteOrder.isPending ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Удаление...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Удалить выбранные ({selectedOrderIds.size})
+                    </>
+                  )}
+                </Button>
+              )}
+
               {/* Date picker */}
               {!filterAllDates && (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -378,6 +487,15 @@ export const OrdersPage = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12 text-center">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                        checked={isAllSelected}
+                        onChange={toggleSelectAll}
+                        title="Выбрать все наряды на текущей странице"
+                      />
+                    </TableHead>
                     <TableHead>Код наряда</TableHead>
                     <TableHead>Адрес объекта</TableHead>
                     <TableHead>Тип работ</TableHead>
@@ -404,11 +522,26 @@ export const OrdersPage = () => {
                     const ont = reqEq.ONT ?? reqEq.ont ?? order.required_ont ?? order.requiredOnt ?? 0
                     const router = reqEq.ROUTER ?? reqEq.router ?? order.required_router ?? order.requiredRouter ?? 0
                     const stb = reqEq.STB ?? reqEq.stb ?? order.required_stb ?? order.requiredStb ?? 0
+                    const isGenerated = order.is_generated ?? order.isGenerated ?? false
 
                     return (
                       <TableRow key={order.id || code}>
+                        <TableCell className="w-12 text-center">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                            checked={selectedOrderIds.has(order.id)}
+                            onChange={() => toggleOrderSelection(order.id)}
+                          />
+                        </TableCell>
                         <TableCell className="font-mono font-semibold text-primary">
                           {code}
+                          {isGenerated && (
+                            <Badge variant="secondary" className="ml-1.5 text-[10px] h-4">
+                              <Sparkles className="h-3 w-3 mr-0.5" />
+                              Сгенер.
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="max-w-[240px]">
                           <p className="truncate font-medium">{address}</p>
@@ -424,8 +557,8 @@ export const OrdersPage = () => {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-xs font-mono">
-                          {slotStart ? slotStart.substring(11, 16) : '—'} –{' '}
-                          {slotEnd ? slotEnd.substring(11, 16) : '—'}
+                          {formatClock(slotStart, '—')} –{' '}
+                          {formatClock(slotEnd, '—')}
                         </TableCell>
                         <TableCell>
                           <Badge
@@ -449,6 +582,14 @@ export const OrdersPage = () => {
                           <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => openEditDialog(order)}
+                            title="Редактировать"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() =>
                               setViewOrder({
                                 ...order,
@@ -462,6 +603,7 @@ export const OrdersPage = () => {
                                 stb,
                               })
                             }
+                            title="Просмотр"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -749,8 +891,8 @@ export const OrdersPage = () => {
                 <div>
                   <span className="text-muted-foreground block mb-0.5">Слот клиента:</span>
                   <p className="font-mono font-medium">
-                    {(viewOrder.slotStart || viewOrder.slot_start)?.substring(11, 16) || '—'} –{' '}
-                    {(viewOrder.slotEnd || viewOrder.slot_end)?.substring(11, 16) || '—'}
+                    {formatClock(viewOrder.slotStart || viewOrder.slot_start, '—')} –{' '}
+                    {formatClock(viewOrder.slotEnd || viewOrder.slot_end, '—')}
                   </p>
                 </div>
                 <div>

@@ -69,6 +69,9 @@ class WorkOrder(
     @Column(name = "previous_order_id", length = 32)
     var previousOrderId: String? = null,
 
+    @Column(name = "is_generated", nullable = false)
+    var isGenerated: Boolean = false,
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 32)
     var status: OrderStatus = OrderStatus.PENDING

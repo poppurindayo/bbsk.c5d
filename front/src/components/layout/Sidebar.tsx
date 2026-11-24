@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { cn } from '@/utils/cn'
-import { NAV_ITEMS, SIDEBAR_WIDTH, SIDEBAR_WIDTH_COLLAPSED } from '@/utils/constants'
+import { getNavItems, SIDEBAR_WIDTH, SIDEBAR_WIDTH_COLLAPSED } from '@/utils/constants'
+import { useAuthStore } from '@/store/authStore'
 import { Menu, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -18,6 +19,8 @@ export const Sidebar = ({
   onCollapseToggle,
 }: SidebarProps) => {
   const location = useLocation()
+  const user = useAuthStore((s) => s.user)
+  const navItems = getNavItems(user?.role)
 
   if (!isOpen && typeof window !== 'undefined' && window.innerWidth >= 1024) {
     return null
@@ -64,7 +67,7 @@ export const Sidebar = ({
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon
             const isActive = location.pathname === item.href
             return (

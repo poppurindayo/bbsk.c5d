@@ -108,9 +108,9 @@ def insert_break_and_restock(
             return cur_dt, False
 
         # Обед должен начаться не ранее break_from_dt и закончиться не позднее break_to_dt
-        # Длительность ровно 60 минут
+        # Длительность — не меньше break_duration_min из смены (H3)
         break_start = max(cur_dt, break_from_dt)
-        break_end = break_start + timedelta(minutes=60)
+        break_end = break_start + timedelta(minutes=staff.shift.break_duration_min)
 
         if break_end <= break_to_dt:
             # Можно вставить обед прямо здесь!

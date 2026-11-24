@@ -248,7 +248,28 @@ class StaffController(
     }
 
     @Operation(
-        summary = "Удалить график смены по ID",
+        summary = "Обновить график смены",
+        description = "Обновляет параметры существующего графика смены по его UUID."
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "График смены успешно обновлен",
+                content = [Content(schema = Schema(implementation = ShiftResponse::class))]),
+            ApiResponse(responseCode = "404", description = "График смены не найден",
+                content = [Content(schema = Schema(implementation = ErrorResponse::class))])
+        ]
+    )
+    @PutMapping("/shifts/{id}")
+    fun updateShift(
+        @Parameter(description = "Уникальный идентификатор смены (UUID)", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
+        @PathVariable id: UUID,
+        @Valid @RequestBody request: CreateShiftRequest
+    ): ResponseEntity<ShiftResponse> {
+        return ResponseEntity.ok(shiftService.update(id, request))
+    }
+
+    @Operation(
+        summary = "Удалить график смены",
         description = "Удаляет график смены из системы по его первичному ключу (UUID). Если к смене привязаны сотрудники, вернется ошибка 409 Conflict."
     )
     @ApiResponses(

@@ -43,11 +43,12 @@ interface GeneratedOrder {
 }
 
 const STANDARD_SLOTS = [
-  { start: '09:00', end: '11:00', label: '09:00 – 11:00 (Утро 1)' },
-  { start: '11:00', end: '13:00', label: '11:00 – 13:00 (Утро 2)' },
-  { start: '13:00', end: '15:00', label: '13:00 – 15:00 (День 1)' },
-  { start: '15:00', end: '17:00', label: '15:00 – 17:00 (День 2)' },
-  { start: '17:00', end: '19:00', label: '17:00 – 19:00 (Вечер)' },
+  { start: '09:00', end: '11:00', label: '09:00 – 11:00' },
+  { start: '11:00', end: '13:00', label: '11:00 – 13:00' },
+  { start: '13:00', end: '15:00', label: '13:00 – 15:00' },
+  { start: '15:00', end: '17:00', label: '15:00 – 17:00' },
+  { start: '17:00', end: '19:00', label: '17:00 – 19:00' },
+  { start: '19:00', end: '21:00', label: '19:00 – 21:00' },
 ]
 
 export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> = ({
@@ -81,6 +82,12 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
     const cleanDate = date.replace(/-/g, '')
     const generated: GeneratedOrder[] = []
 
+    // Distribute orders evenly across slots
+    const slotsCount = STANDARD_SLOTS.length
+    const ordersPerSlot = Math.ceil(count / slotsCount)
+    let slotIndex = 0
+    let slotUsage = 0
+
     for (let i = 1; i <= count; i++) {
       const orderNum = String(1000 + i).padStart(4, '0')
       const orderId = `ORD-${cleanDate}-${orderNum}`
@@ -90,11 +97,17 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
       // Pick random work type
       const wt = workTypes.length > 0 ? workTypes[Math.floor(Math.random() * workTypes.length)] : null
 
-      // Pick slot
-      const slot = STANDARD_SLOTS[(i - 1) % STANDARD_SLOTS.length]
+      // Pick slot - distribute evenly across all slots
+      const slot = STANDARD_SLOTS[slotIndex]
       const slotStart = `${date}T${slot.start}:00+05:00`
       const slotEnd = `${date}T${slot.end}:00+05:00`
       const registeredAt = `${date}T08:00:00+05:00`
+
+      slotUsage++
+      if (slotUsage >= ordersPerSlot && slotIndex < slotsCount - 1) {
+        slotIndex++
+        slotUsage = 0
+      }
 
       // Equipment requirements based on work type code or random
       let ont = 0
@@ -194,6 +207,8 @@ export const TestOrdersGeneratorModal: React.FC<TestOrdersGeneratorModalProps> =
           },
           is_repeat: ord.is_repeat,
           isRepeat: ord.is_repeat,
+          is_generated: true,
+          isGenerated: true,
         }
 
         await ordersApi.create(payload)

@@ -12,7 +12,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Plus, Search, Loader2, Edit, Trash2, User, Clock, AlertTriangle } from 'lucide-react'
-import { useStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, useShifts, useCreateShift, useDeleteShift, useServiceCenters } from '@/hooks/useApi'
+import { useStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, useShifts, useCreateShift, useUpdateShift, useDeleteShift, useServiceCenters } from '@/hooks/useApi'
 import { cn } from '@/utils/cn'
 
 const staffSchema = z.object({
@@ -63,6 +63,7 @@ export const StaffPage = ({ defaultTab = 'staff', hideTitle = false }: StaffPage
   const [activeTab, setActiveTab] = useState<string>(defaultTab)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingStaff, setEditingStaff] = useState<any>(null)
+  const [editingShift, setEditingShift] = useState<any>(null)
   const [dialogError, setDialogError] = useState<string>('')
 
   const { data: staff = [], isLoading: staffLoading, refetch: refetchStaff } = useStaff()
@@ -73,6 +74,7 @@ export const StaffPage = ({ defaultTab = 'staff', hideTitle = false }: StaffPage
   const updateStaff = useUpdateStaff()
   const deleteStaff = useDeleteStaff()
   const createShift = useCreateShift()
+  const updateShift = useUpdateShift()
   const deleteShift = useDeleteShift()
 
   const staffForm = useForm<StaffForm>({
@@ -149,14 +151,14 @@ export const StaffPage = ({ defaultTab = 'staff', hideTitle = false }: StaffPage
   const onStaffSubmit = (data: StaffForm) => {
     setDialogError('')
     const payload = {
-      staffId: data.staffId,
-      displayName: data.displayName,
-      serviceCenterId: data.serviceCenterId,
-      shiftId: data.shiftId || undefined,
-      heightPermit: data.heightPermit,
-      experienceYears: data.experienceYears,
-      equipmentStart: data.equipmentStart,
-      equipmentCapacity: data.equipmentCapacity,
+      staff_id: data.staffId,
+      display_name: data.displayName,
+      service_center_id: data.serviceCenterId,
+      shift_id: data.shiftId || undefined,
+      height_permit: data.heightPermit,
+      experience_years: data.experienceYears,
+      equipment_start: data.equipmentStart,
+      equipment_capacity: data.equipmentCapacity,
       profiles: data.profiles,
       technologies: data.technologies,
     }
@@ -189,15 +191,33 @@ export const StaffPage = ({ defaultTab = 'staff', hideTitle = false }: StaffPage
 
   const onShiftSubmit = (data: ShiftForm) => {
     setDialogError('')
-    createShift.mutate(data, {
-      onSuccess: () => {
-        setDialogOpen(false)
-        refetchShifts()
-      },
-      onError: (err: any) => {
-        setDialogError(err.response?.data?.message || 'Ошибка создания смены')
-      },
+    const payload = {
+      start: data.startTime,
+      end: data.endTime,
+      break_duration_min: data.breakDurationMin,
+      break_window: { from: data.breakWindowFrom, to: data.breakWindowTo },
+    }
+    const onSuccess = () => { setDialogOpen(false); setEditingShift(null); refetchShifts() }
+    const onError = (err: any) => setDialogError(err.response?.data?.message || 'Ошибка сохранения смены')
+
+    if (editingShift) {
+      updateShift.mutate({ id: editingShift.id, data: payload }, { onSuccess, onError })
+    } else {
+      createShift.mutate(payload, { onSuccess, onError })
+    }
+  }
+
+  const openEditShift = (sh: any) => {
+    setEditingShift(sh)
+    setDialogError('')
+    shiftForm.reset({
+      startTime: sh.start || sh.startTime || '08:00',
+      endTime: sh.end || sh.endTime || '17:00',
+      breakDurationMin: sh.break_duration_min ?? sh.breakDurationMin ?? 60,
+      breakWindowFrom: sh.break_window?.from ?? sh.breakWindowFrom ?? '12:00',
+      breakWindowTo: sh.break_window?.to ?? sh.breakWindowTo ?? '14:00',
     })
+    setDialogOpen(true)
   }
 
   return (
@@ -216,7 +236,12 @@ export const StaffPage = ({ defaultTab = 'staff', hideTitle = false }: StaffPage
           </Button>
         )}
         {activeTab === 'shifts' && (
-          <Button onClick={() => { setDialogError(''); setDialogOpen(true); }}>
+          <Button onClick={() => {
+            setDialogError('')
+            setEditingShift(null)
+            shiftForm.reset({ startTime: '08:00', endTime: '17:00', breakDurationMin: 60, breakWindowFrom: '12:00', breakWindowTo: '14:00' })
+            setDialogOpen(true)
+          }}>
             <Plus className="mr-2 h-4 w-4" />
             Добавить смену
           </Button>
@@ -385,7 +410,10 @@ export const StaffPage = ({ defaultTab = 'staff', hideTitle = false }: StaffPage
                           <TableCell className="font-mono text-sm">{windowFrom} – {windowTo}</TableCell>
                           <TableCell className="font-mono text-xs text-muted-foreground">{sh.id.slice(0, 8)}...</TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteShift.mutate(sh.id, { onSuccess: () => refetchShifts() })} title="Удалить смену"><Trash2 className="h-4 w-4" /></Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => openEditShift(sh)} title="Редактировать смену"><Edit className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteShift.mutate(sh.id, { onSuccess: () => refetchShifts() })} title="Удалить смену"><Trash2 className="h-4 w-4" /></Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       )
@@ -484,7 +512,7 @@ export const StaffPage = ({ defaultTab = 'staff', hideTitle = false }: StaffPage
       <Dialog open={dialogOpen && activeTab === 'shifts'} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Добавить рабочую смену</DialogTitle>
+            <DialogTitle>{editingShift ? 'Редактировать рабочую смену' : 'Добавить рабочую смену'}</DialogTitle>
           </DialogHeader>
           {dialogError && (
             <div className="p-3 text-xs bg-destructive/10 text-destructive rounded-lg flex items-center gap-2">
@@ -522,7 +550,9 @@ export const StaffPage = ({ defaultTab = 'staff', hideTitle = false }: StaffPage
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Отмена</Button>
-              <Button type="submit" disabled={createShift.isPending}>Добавить смену</Button>
+              <Button type="submit" disabled={createShift.isPending || updateShift.isPending}>
+                {editingShift ? 'Сохранить' : 'Добавить смену'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

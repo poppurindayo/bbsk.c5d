@@ -39,9 +39,12 @@ import {
   useOrders,
   useServiceCenters,
   useStaff,
+  useBuildings,
 } from '@/hooks/useApi'
 import { useDayStore } from '@/store/dayStore'
 import { TestOrdersGeneratorModal } from '@/components/orders/TestOrdersGeneratorModal'
+import { GanttChart } from '@/components/gantt/GanttChart'
+import { formatClock } from '@/utils/time'
 
 const STANDARD_SLOTS = [
   { start: '09:00', end: '11:00', label: '09:00 – 11:00' },
@@ -79,6 +82,20 @@ export const DayPlanningPage = () => {
   const { data: serviceCenters = [] } = useServiceCenters()
   const { data: ordersList = [], refetch: refetchOrders, isLoading: ordersLoading } = useOrders({ date: currentDate })
   const { data: staffList = [] } = useStaff()
+  const { data: buildings = [] } = useBuildings()
+
+  // Резолв кода здания → адрес (для человекочитаемого отображения остановок)
+  const buildingAddressMap = useMemo(() => {
+    const m = new Map<string, string>()
+    ;(buildings as any[]).forEach((b) => {
+      const addr = b.address || ''
+      if (!addr) return
+      if (b.building_id) m.set(b.building_id, addr)
+      if (b.code) m.set(b.code, addr)
+      if (b.id) m.set(b.id, addr)
+    })
+    return m
+  }, [buildings])
 
   const createPlan = useCreatePlan()
   const initDay = useInitDay()
@@ -169,8 +186,8 @@ export const DayPlanningPage = () => {
     const slotStartStr = currentShift?.start || order.slot_start || order.slotStart || `${currentDate}T09:00:00+05:00`
     const slotEndStr = currentShift?.end || order.slot_end || order.slotEnd || `${currentDate}T11:00:00+05:00`
 
-    setNewSlotStart(slotStartStr.substring(11, 16) || '09:00')
-    setNewSlotEnd(slotEndStr.substring(11, 16) || '11:00')
+    setNewSlotStart(formatClock(slotStartStr, '09:00'))
+    setNewSlotEnd(formatClock(slotEndStr, '11:00'))
     setShiftSlotModalOrder(order)
   }
 
@@ -620,8 +637,8 @@ export const DayPlanningPage = () => {
                                   customSlot ? 'bg-amber-100 text-amber-900 border border-amber-300' : ''
                                 }`}
                               >
-                                {slotStart ? slotStart.substring(11, 16) : '09:00'} –{' '}
-                                {slotEnd ? slotEnd.substring(11, 16) : '11:00'}
+                                {formatClock(slotStart, '09:00')} –{' '}
+                                {formatClock(slotEnd, '11:00')}
                                 {customSlot && <span className="text-[9px] font-bold">*смещен</span>}
                               </span>
                             </TableCell>
@@ -807,12 +824,21 @@ export const DayPlanningPage = () => {
 
               {/* Plan Sub Tabs */}
               <Tabs value={planSubTab} onValueChange={setPlanSubTab} className="space-y-4">
-                <TabsList className="grid grid-cols-4 max-w-xl text-xs h-9">
+                <TabsList className="grid grid-cols-5 max-w-xl text-xs h-9">
                   <TabsTrigger value="routes">Маршруты ({filteredRoutes.length})</TabsTrigger>
+                  <TabsTrigger value="gantt">Гант</TabsTrigger>
                   <TabsTrigger value="unassigned">Не распределено ({plan.unassignedOrders?.length || 0})</TabsTrigger>
                   <TabsTrigger value="alerts">Алерты ({plan.alerts?.length || 0})</TabsTrigger>
                   <TabsTrigger value="pgp">ПГП ({plan.metrics?.pgpOrders ?? 0})</TabsTrigger>
                 </TabsList>
+
+                {/* SubTab: Gantt Chart */}
+                <TabsContent value="gantt" className="space-y-4">
+                  <GanttChart
+                    routes={filteredRoutes}
+                    modelNow={dayData?.currentNow || (modelNowTime ? `${currentDate}T${modelNowTime}:00+05:00` : undefined)}
+                  />
+                </TabsContent>
 
                 {/* SubTab: Routes */}
                 <TabsContent value="routes" className="space-y-4">
@@ -835,13 +861,15 @@ export const DayPlanningPage = () => {
                         <CardHeader className="pb-3 bg-muted/20 border-b">
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                             <div className="flex items-center gap-2.5">
-                              {scCode && (
-                                <Badge variant="secondary" className="font-mono text-xs">
-                                  {scCode}
+                              <span className="font-bold text-base">{staffName || staffCode}</span>
+                              {staffCode && (
+                                <Badge variant="secondary" className="font-mono text-[10px]">
+                                  {staffCode}
                                 </Badge>
                               )}
-                              <span className="font-bold text-base">{staffCode}</span>
-                              <span className="text-sm text-muted-foreground">{staffName}</span>
+                              {scCode && (
+                                <span className="text-xs text-muted-foreground">{scCode}</span>
+                              )}
                               <Badge variant={route.status === 'ACTIVE' ? 'default' : 'outline'} className="text-[10px]">
                                 {route.status}
                               </Badge>
@@ -870,6 +898,7 @@ export const DayPlanningPage = () => {
                               {(route.stops || []).map((stop: any) => {
                                 const orderCode = stop.orderCode || stop.order_code || stop.orderId || stop.order_id
                                 const locationCode = stop.locationCode || stop.location_code || ''
+                                const locationAddress = buildingAddressMap.get(locationCode) || ''
                                 const arrival = stop.arrival
                                 const endTime = stop.endTime || stop.end_time
                                 const travelSec = stop.travelSec ?? stop.travel_sec ?? 0
@@ -896,22 +925,22 @@ export const DayPlanningPage = () => {
                                     </Badge>
                                   </TableCell>
                                   <TableCell className="font-medium">
-                                    {orderCode ? (
-                                      <div className="flex items-center gap-1.5 font-mono">
-                                        <span className="text-primary font-bold">{orderCode}</span>
-                                        {locationCode && (
-                                          <span className="text-muted-foreground text-[11px]">({locationCode})</span>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <span className="font-mono">{locationCode}</span>
-                                    )}
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="truncate max-w-[240px]" title={locationAddress || locationCode}>
+                                        {locationAddress || locationCode || '—'}
+                                      </span>
+                                      {(orderCode || locationCode) && (
+                                        <span className="text-muted-foreground text-[10px] font-mono">
+                                          {orderCode || locationCode}
+                                        </span>
+                                      )}
+                                    </div>
                                   </TableCell>
                                   <TableCell className="font-mono">
-                                    {arrival ? arrival.substring(11, 16) : '—'}
+                                    {formatClock(arrival, '—')}
                                   </TableCell>
                                   <TableCell className="font-mono">
-                                    {endTime ? endTime.substring(11, 16) : '—'}
+                                    {formatClock(endTime, '—')}
                                   </TableCell>
                                   <TableCell>
                                     {travelSec > 0 ? `${Math.round(travelSec / 60)} мин` : '0 мин'}

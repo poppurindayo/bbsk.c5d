@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 @Service
@@ -31,7 +32,8 @@ class WorkOrderService(
     private val workTypeRepository: WorkTypeRepository,
     private val buildingRepository: BuildingRepository,
     private val accessNodeRepository: AccessNodeRepository,
-    private val serviceCenterRepository: ServiceCenterRepository
+    private val serviceCenterRepository: ServiceCenterRepository,
+    private val routeRepository: RouteRepository
 ) {
 
     @Transactional(readOnly = true)
@@ -134,6 +136,7 @@ class WorkOrderService(
             requiredStb = stb,
             isRepeat = request.isRepeat,
             previousOrderId = request.previousOrderId?.trim(),
+            isGenerated = request.isGenerated,
             status = request.status
         )
 
@@ -208,6 +211,39 @@ class WorkOrderService(
         workOrderRepository.delete(order)
     }
 
+    /**
+     * Удаляет только сгенерированные (тестовые) наряды дня, сохраняя вручную созданные.
+     * Сначала убирает ссылки на них из маршрутов (стопы), затем удаляет сами наряды.
+     */
+    @Transactional
+    fun deleteGenerated(date: LocalDate): Int {
+        val day = workDayRepository.findByDate(date) ?: return 0
+        val allOrders = workOrderRepository.findAllByDayId(day.id)
+        val generated = allOrders.filter { it.isGenerated }
+        if (generated.isEmpty()) return 0
+
+        val generatedIds = generated.map { it.id }.toSet()
+
+        // Удаляем стопы маршрутов, ссылающиеся на сгенерированные наряды (иначе FK-конфликт)
+        val routes = routeRepository.findAllByDayId(day.id)
+        var routesChanged = false
+        for (route in routes) {
+            val toRemove = route.stops.filter { stop -> stop.order?.id in generatedIds }
+            if (toRemove.isNotEmpty()) {
+                route.stops.removeAll(toRemove)
+                routesChanged = true
+            }
+        }
+        if (routesChanged) {
+            routeRepository.saveAll(routes)
+            routeRepository.flush()
+        }
+
+        workOrderRepository.deleteAll(generated)
+        workOrderRepository.flush()
+        return generated.size
+    }
+
     private fun resolveWorkDay(dayId: UUID?, dayDate: LocalDate?, slotStart: OffsetDateTime): WorkDay {
         if (dayId != null) {
             return workDayRepository.findById(dayId).orElseThrow {
@@ -215,13 +251,16 @@ class WorkOrderService(
             }
         }
 
-        val targetDate = dayDate ?: slotStart.toLocalDate()
+        // Jackson приводит OffsetDateTime к UTC ("09:00+05:00" -> "04:00Z"), а рабочий день
+        // живёт по UTC+5: дату и "сейчас" считаем в местном офсете, а не в том, что пришёл.
+        val slotLocal = slotStart.withOffsetSameInstant(ZoneOffset.ofHours(5))
+        val targetDate = dayDate ?: slotLocal.toLocalDate()
         val existingDay = workDayRepository.findByDate(targetDate)
         if (existingDay != null) {
             return existingDay
         }
 
-        val defaultNow = slotStart.withHour(8).withMinute(30).withSecond(0).withNano(0)
+        val defaultNow = slotLocal.withHour(8).withMinute(30).withSecond(0).withNano(0)
         val newDay = WorkDay(
             date = targetDate,
             currentNow = defaultNow,
@@ -281,6 +320,7 @@ class WorkOrderService(
             ),
             isRepeat = isRepeat,
             previousOrderId = previousOrderId,
+            isGenerated = isGenerated,
             status = status
         )
     }

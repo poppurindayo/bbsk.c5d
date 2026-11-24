@@ -85,6 +85,16 @@ export const useDeleteShift = () => {
   })
 }
 
+export const useUpdateShift = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => staffApi.shifts.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shifts'] })
+    },
+  })
+}
+
 // Buildings hooks
 export const useBuildings = (params?: { buildingType?: string; accessNodeId?: string; serviceCenterId?: string }) => {
   return useQuery({
@@ -117,6 +127,26 @@ export const useCreateBuilding = () => {
   })
 }
 
+export const useUpdateBuilding = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => buildingsApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['buildings'] })
+    },
+  })
+}
+
+export const useDeleteBuilding = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => buildingsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['buildings'] })
+    },
+  })
+}
+
 // Access Nodes hooks
 export const useAccessNodes = (params?: { technology?: string }) => {
   return useQuery({
@@ -132,6 +162,26 @@ export const useCreateAccessNode = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (data: any) => buildingsApi.accessNodes.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accessNodes'] })
+    },
+  })
+}
+
+export const useUpdateAccessNode = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => buildingsApi.accessNodes.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accessNodes'] })
+    },
+  })
+}
+
+export const useDeleteAccessNode = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => buildingsApi.accessNodes.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accessNodes'] })
     },
@@ -159,6 +209,26 @@ export const useCreateServiceCenter = () => {
   })
 }
 
+export const useUpdateServiceCenter = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => buildingsApi.serviceCenters.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['serviceCenters'] })
+    },
+  })
+}
+
+export const useDeleteServiceCenter = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => buildingsApi.serviceCenters.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['serviceCenters'] })
+    },
+  })
+}
+
 // Work Types hooks
 export const useWorkTypes = () => {
   return useQuery({
@@ -174,6 +244,26 @@ export const useCreateWorkType = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (data: any) => workTypesApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workTypes'] })
+    },
+  })
+}
+
+export const useUpdateWorkType = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => workTypesApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workTypes'] })
+    },
+  })
+}
+
+export const useDeleteWorkType = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => workTypesApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workTypes'] })
     },
@@ -238,6 +328,26 @@ export const useCreateOrder = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (data: any) => ordersApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}
+
+export const useDeleteOrder = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => ordersApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}
+
+export const useUpdateOrder = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => ordersApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] })
     },

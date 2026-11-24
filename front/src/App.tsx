@@ -37,6 +37,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>
 }
 
+const RoleRoute = ({ children, allow }: { children: React.ReactNode; allow: string[] }) => {
+  const user = useAuthStore((state) => state.user)
+  if (!user || !allow.includes(user.role)) {
+    return <Navigate to="/" replace />
+  }
+  return <>{children}</>
+}
+
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const user = useAuthStore((state) => state.user)
@@ -61,11 +69,11 @@ function App() {
         <Route path="/events" element={<EventsPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/pgp-groups" element={<PgpGroupsPage />} />
-        <Route path="/admin" element={<AdminPage />} />
-        {/* Retain individual admin paths for direct links / bookmarks */}
-        <Route path="/staff" element={<StaffPage />} />
-        <Route path="/buildings" element={<BuildingsPage />} />
-        <Route path="/work-types" element={<WorkTypesPage />} />
+        {/* Admin-only routes */}
+        <Route path="/admin" element={<RoleRoute allow={['ADMIN']}><AdminPage /></RoleRoute>} />
+        <Route path="/staff" element={<RoleRoute allow={['ADMIN']}><StaffPage /></RoleRoute>} />
+        <Route path="/buildings" element={<RoleRoute allow={['ADMIN']}><BuildingsPage /></RoleRoute>} />
+        <Route path="/work-types" element={<RoleRoute allow={['ADMIN']}><WorkTypesPage /></RoleRoute>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -14,6 +14,7 @@ class TravelMatrix:
         self.distances_m: list[list[int]] = []
         self.hourly_factors: Dict[int, float] = {}
         self.is_loaded: bool = False
+        self.last_mtime: float = 0.0
 
     def load_from_file(self, explicit_path: str | None = None) -> bool:
         candidates = []
@@ -59,6 +60,10 @@ class TravelMatrix:
                     self.hourly_factors[hf["hour"]] = float(hf["factor"])
 
             self.is_loaded = True
+            try:
+                self.last_mtime = os.path.getmtime(found_path)
+            except OSError:
+                self.last_mtime = 0.0
             logger.info("Loaded travel matrix from %s with %d points", found_path, len(points))
             return True
         except Exception as e:

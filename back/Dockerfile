@@ -40,11 +40,15 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 # Копирование скомпилированного артефакта из сборочного образа
 COPY --from=builder /build/app.jar app.jar
 
-# Назначение владельца директории приложения
-RUN chown -R appuser:appgroup /app
+# Каталог под общий том с матрицей времени в пути. Создаём его сразу с владельцем
+# appuser, чтобы свежесозданный named volume унаследовал права и приложение могло
+# писать travel_matrix.json (по умолчанию Docker монтирует том от root).
+RUN mkdir -p /app/data && chown -R appuser:appgroup /app
 
 USER appuser
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
+# -Duser.timezone=Asia/Yekaterinburg — все времена (смены, слоты) в UTC+5 по ТЗ,
+# иначе OffsetDateTime отдаётся в UTC и фронт показывает 04:00 вместо 09:00.
+ENTRYPOINT ["java", "-Duser.timezone=Asia/Yekaterinburg", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]

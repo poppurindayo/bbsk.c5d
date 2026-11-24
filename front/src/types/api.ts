@@ -48,18 +48,18 @@ export interface Staff {
 }
 
 export interface StaffCreateRequest {
-  staffId: string
-  displayName: string
-  serviceCenterId: string
-  shiftId?: string
-  heightPermit?: boolean
-  experienceYears?: number
-  equipmentStart: {
+  staff_id: string
+  display_name: string
+  service_center_id: string
+  shift_id?: string
+  height_permit?: boolean
+  experience_years?: number
+  equipment_start: {
     ONT: number
     ROUTER: number
     STB: number
   }
-  equipmentCapacity: {
+  equipment_capacity: {
     ONT: number
     ROUTER: number
     STB: number
@@ -78,11 +78,13 @@ export interface Shift {
 }
 
 export interface ShiftCreateRequest {
-  startTime: string
-  endTime: string
-  breakDurationMin?: number
-  breakWindowFrom: string
-  breakWindowTo: string
+  start: string
+  end: string
+  break_duration_min?: number
+  break_window: {
+    from: string
+    to: string
+  }
 }
 
 export interface ServiceCenter {
