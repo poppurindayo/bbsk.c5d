@@ -66,50 +66,6 @@ export const OrdersPage = () => {
   const createOrder = useCreateOrder()
   const deleteOrder = useDeleteOrder()
 
-  // Bulk delete state
-  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
-  const isAllSelected = filteredOrders.length > 0 && filteredOrders.every((o: any) => selectedOrderIds.has(o.id))
-
-  const toggleOrderSelection = (orderId: string) => {
-    setSelectedOrderIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(orderId)) {
-        next.delete(orderId)
-      } else {
-        next.add(orderId)
-      }
-      return next
-    })
-  }
-
-  const toggleSelectAll = () => {
-    if (isAllSelected) {
-      setSelectedOrderIds(new Set())
-    } else {
-      setSelectedOrderIds(new Set(filteredOrders.map((o: any) => o.id)))
-    }
-  }
-
-  const handleBulkDelete = async () => {
-    if (selectedOrderIds.size === 0) return
-    if (!window.confirm(`Удалить ${selectedOrderIds.size} наряд(ов)? Это действие нельзя отменить.`)) return
-
-    let successCount = 0
-    for (const orderId of selectedOrderIds) {
-      try {
-        await deleteOrder.mutateAsync(orderId)
-        successCount++
-      } catch (err) {
-        console.error('Failed to delete order:', orderId, err)
-      }
-    }
-    setSelectedOrderIds(new Set())
-    refetch()
-    if (successCount > 0) {
-      alert(`Успешно удалено ${successCount} наряд(ов)`)
-    }
-  }
-
   // Generate unique order ID in format ORD-YYYYMMDD-XXXX
   const generateOrderId = (dateStr: string) => {
     const cleanDate = dateStr.replace(/-/g, '')
@@ -280,6 +236,50 @@ export const OrdersPage = () => {
       )
     })
   }, [orders, selectedServiceCenterId, serviceCenters, search, buildingMap, workTypeMap])
+
+  // Bulk delete state
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
+  const isAllSelected = filteredOrders.length > 0 && filteredOrders.every((o: any) => selectedOrderIds.has(o.id))
+
+  const toggleOrderSelection = (orderId: string) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(orderId)) {
+        next.delete(orderId)
+      } else {
+        next.add(orderId)
+      }
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedOrderIds(new Set())
+    } else {
+      setSelectedOrderIds(new Set(filteredOrders.map((o: any) => o.id)))
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedOrderIds.size === 0) return
+    if (!window.confirm(`Удалить ${selectedOrderIds.size} наряд(ов)? Это действие нельзя отменить.`)) return
+
+    let successCount = 0
+    for (const orderId of selectedOrderIds) {
+      try {
+        await deleteOrder.mutateAsync(orderId)
+        successCount++
+      } catch (err) {
+        console.error('Failed to delete order:', orderId, err)
+      }
+    }
+    setSelectedOrderIds(new Set())
+    refetch()
+    if (successCount > 0) {
+      alert(`Успешно удалено ${successCount} наряд(ов)`)
+    }
+  }
 
   return (
     <div className="space-y-6">
