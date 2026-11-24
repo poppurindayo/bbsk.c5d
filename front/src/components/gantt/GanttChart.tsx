@@ -1,6 +1,5 @@
 import { useMemo, useState, useCallback } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Clock, Package, Wrench, Coffee, ArrowLeftRight, MapPin, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Route, RouteStop } from '@/types/api'
@@ -306,16 +305,14 @@ export function GanttChart({ routes, modelNow, className }: GanttChartProps) {
                     style={{ width: labelWidth }}
                   >
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold font-mono">{route.staffCode}</span>
-                      {route.serviceCenterCode && (
-                        <Badge variant="outline" className="text-[8px] py-0 px-1">
-                          {route.serviceCenterCode}
-                        </Badge>
+                      <span className="text-xs font-bold truncate max-w-full">{route.staffName || route.staffCode}</span>
+                      {route.staffCode && (
+                        <span className="text-[8px] font-mono text-muted-foreground shrink-0">({route.staffCode})</span>
                       )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
-                      {route.staffName}
-                    </span>
+                    {route.serviceCenterCode && (
+                      <span className="text-[9px] text-muted-foreground truncate max-w-full">{route.serviceCenterCode}</span>
+                    )}
                     <div className="flex items-center gap-2 text-[9px] text-muted-foreground">
                       <span>{route.totalOrders} наряд.</span>
                       <span>·</span>

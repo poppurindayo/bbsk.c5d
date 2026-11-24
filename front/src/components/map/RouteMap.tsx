@@ -453,7 +453,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
                         <div className="p-1 text-xs space-y-1.5 min-w-[210px]">
                           <div className="flex items-center justify-between border-b pb-1">
                             <span className="font-bold text-sm" style={{ color: route.color }}>
-                              Бригада {route.staffCode}
+                              {route.staffName || `Бригада ${route.staffCode}`}
                             </span>
                             <Badge variant={stop.type === 'VISIT' ? 'default' : 'secondary'}>
                               {stop.type}
@@ -511,7 +511,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
                         </div>
                       </Popup>
                       <Tooltip direction="top" offset={[0, -12]}>
-                        #{stop.seq} {stop.orderId || stop.locationCode} ({route.staffCode})
+                        #{stop.seq} {stop.orderId || stop.locationCode} · {route.staffName || route.staffCode}
                       </Tooltip>
                     </Marker>
                   )

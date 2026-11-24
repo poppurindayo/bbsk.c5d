@@ -39,6 +39,7 @@ import {
   useOrders,
   useServiceCenters,
   useStaff,
+  useBuildings,
 } from '@/hooks/useApi'
 import { useDayStore } from '@/store/dayStore'
 import { TestOrdersGeneratorModal } from '@/components/orders/TestOrdersGeneratorModal'
@@ -80,6 +81,20 @@ export const DayPlanningPage = () => {
   const { data: serviceCenters = [] } = useServiceCenters()
   const { data: ordersList = [], refetch: refetchOrders, isLoading: ordersLoading } = useOrders({ date: currentDate })
   const { data: staffList = [] } = useStaff()
+  const { data: buildings = [] } = useBuildings()
+
+  // Резолв кода здания → адрес (для человекочитаемого отображения остановок)
+  const buildingAddressMap = useMemo(() => {
+    const m = new Map<string, string>()
+    ;(buildings as any[]).forEach((b) => {
+      const addr = b.address || ''
+      if (!addr) return
+      if (b.building_id) m.set(b.building_id, addr)
+      if (b.code) m.set(b.code, addr)
+      if (b.id) m.set(b.id, addr)
+    })
+    return m
+  }, [buildings])
 
   const createPlan = useCreatePlan()
   const initDay = useInitDay()
@@ -845,13 +860,15 @@ export const DayPlanningPage = () => {
                         <CardHeader className="pb-3 bg-muted/20 border-b">
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                             <div className="flex items-center gap-2.5">
-                              {scCode && (
-                                <Badge variant="secondary" className="font-mono text-xs">
-                                  {scCode}
+                              <span className="font-bold text-base">{staffName || staffCode}</span>
+                              {staffCode && (
+                                <Badge variant="secondary" className="font-mono text-[10px]">
+                                  {staffCode}
                                 </Badge>
                               )}
-                              <span className="font-bold text-base">{staffCode}</span>
-                              <span className="text-sm text-muted-foreground">{staffName}</span>
+                              {scCode && (
+                                <span className="text-xs text-muted-foreground">{scCode}</span>
+                              )}
                               <Badge variant={route.status === 'ACTIVE' ? 'default' : 'outline'} className="text-[10px]">
                                 {route.status}
                               </Badge>
@@ -880,6 +897,7 @@ export const DayPlanningPage = () => {
                               {(route.stops || []).map((stop: any) => {
                                 const orderCode = stop.orderCode || stop.order_code || stop.orderId || stop.order_id
                                 const locationCode = stop.locationCode || stop.location_code || ''
+                                const locationAddress = buildingAddressMap.get(locationCode) || ''
                                 const arrival = stop.arrival
                                 const endTime = stop.endTime || stop.end_time
                                 const travelSec = stop.travelSec ?? stop.travel_sec ?? 0
@@ -906,16 +924,16 @@ export const DayPlanningPage = () => {
                                     </Badge>
                                   </TableCell>
                                   <TableCell className="font-medium">
-                                    {orderCode ? (
-                                      <div className="flex items-center gap-1.5 font-mono">
-                                        <span className="text-primary font-bold">{orderCode}</span>
-                                        {locationCode && (
-                                          <span className="text-muted-foreground text-[11px]">({locationCode})</span>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <span className="font-mono">{locationCode}</span>
-                                    )}
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="truncate max-w-[240px]" title={locationAddress || locationCode}>
+                                        {locationAddress || locationCode || '—'}
+                                      </span>
+                                      {(orderCode || locationCode) && (
+                                        <span className="text-muted-foreground text-[10px] font-mono">
+                                          {orderCode || locationCode}
+                                        </span>
+                                      )}
+                                    </div>
                                   </TableCell>
                                   <TableCell className="font-mono">
                                     {arrival ? arrival.substring(11, 16) : '—'}
