@@ -75,20 +75,20 @@ export const useCreateShift = () => {
   })
 }
 
-export const useUpdateShift = () => {
+export const useDeleteShift = () => {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: ShiftCreateRequest }) => staffApi.shifts.update(id, data),
+    mutationFn: (id: string) => staffApi.shifts.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
     },
   })
 }
 
-export const useDeleteShift = () => {
+export const useUpdateShift = () => {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => staffApi.shifts.delete(id),
+    mutationFn: ({ id, data }: { id: string; data: any }) => staffApi.shifts.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
     },
@@ -328,6 +328,26 @@ export const useCreateOrder = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (data: any) => ordersApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}
+
+export const useDeleteOrder = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => ordersApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}
+
+export const useUpdateOrder = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => ordersApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] })
     },

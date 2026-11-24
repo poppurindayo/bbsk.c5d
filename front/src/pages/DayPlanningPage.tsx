@@ -44,6 +44,7 @@ import {
 import { useDayStore } from '@/store/dayStore'
 import { TestOrdersGeneratorModal } from '@/components/orders/TestOrdersGeneratorModal'
 import { GanttChart } from '@/components/gantt/GanttChart'
+import { formatClock } from '@/utils/time'
 
 const STANDARD_SLOTS = [
   { start: '09:00', end: '11:00', label: '09:00 – 11:00' },
@@ -185,8 +186,8 @@ export const DayPlanningPage = () => {
     const slotStartStr = currentShift?.start || order.slot_start || order.slotStart || `${currentDate}T09:00:00+05:00`
     const slotEndStr = currentShift?.end || order.slot_end || order.slotEnd || `${currentDate}T11:00:00+05:00`
 
-    setNewSlotStart(slotStartStr.substring(11, 16) || '09:00')
-    setNewSlotEnd(slotEndStr.substring(11, 16) || '11:00')
+    setNewSlotStart(formatClock(slotStartStr, '09:00'))
+    setNewSlotEnd(formatClock(slotEndStr, '11:00'))
     setShiftSlotModalOrder(order)
   }
 
@@ -636,8 +637,8 @@ export const DayPlanningPage = () => {
                                   customSlot ? 'bg-amber-100 text-amber-900 border border-amber-300' : ''
                                 }`}
                               >
-                                {slotStart ? slotStart.substring(11, 16) : '09:00'} –{' '}
-                                {slotEnd ? slotEnd.substring(11, 16) : '11:00'}
+                                {formatClock(slotStart, '09:00')} –{' '}
+                                {formatClock(slotEnd, '11:00')}
                                 {customSlot && <span className="text-[9px] font-bold">*смещен</span>}
                               </span>
                             </TableCell>
@@ -936,10 +937,10 @@ export const DayPlanningPage = () => {
                                     </div>
                                   </TableCell>
                                   <TableCell className="font-mono">
-                                    {arrival ? arrival.substring(11, 16) : '—'}
+                                    {formatClock(arrival, '—')}
                                   </TableCell>
                                   <TableCell className="font-mono">
-                                    {endTime ? endTime.substring(11, 16) : '—'}
+                                    {formatClock(endTime, '—')}
                                   </TableCell>
                                   <TableCell>
                                     {travelSec > 0 ? `${Math.round(travelSec / 60)} мин` : '0 мин'}

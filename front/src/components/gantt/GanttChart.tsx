@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Clock, Package, Wrench, Coffee, ArrowLeftRight, MapPin, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Route, RouteStop } from '@/types/api'
+import { toMinutesOfDay } from '@/utils/time'
 
 // ─── Color system per stop type ───────────────────────────────────────────────
 const STOP_COLORS: Record<string, { bg: string; border: string; text: string; label: string }> = {
@@ -39,12 +40,8 @@ interface TimeRange {
   totalMinutes: number
 }
 
-function parseTimeToMinutes(timeStr: string): number {
-  if (!timeStr) return 0
-  const part = timeStr.includes('T') ? timeStr.split('T')[1] : timeStr
-  const [h, m] = part.substring(0, 5).split(':').map(Number)
-  return h * 60 + m
-}
+// ISO-строки (в т.ч. "...Z" от бэкенда) приводятся к UTC+5, "HH:mm" — как есть
+const parseTimeToMinutes = toMinutesOfDay
 
 function formatMinutesToTime(mins: number): string {
   const h = Math.floor(mins / 60)
